@@ -5,3 +5,7 @@
 ## 2024-05-24 - GitHub Actions Action Name
 **Learning:** Appetizeio GitHub action is named `appetizeio/github-action-appetize`, not `appetizeio/appetize-github-action`.
 **Action:** Be careful about GitHub action names when setting up CI.
+
+## 2024-05-24 - GitHub Actions Action Version
+**Learning:** `appetizeio/github-action-appetize` does not have a `v1` tag. Must use a specific version like `v1.1.0`.
+**Action:** Always check available tags for GitHub Actions if a short version tag like `v1` fails.
