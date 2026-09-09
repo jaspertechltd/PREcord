@@ -43,7 +43,7 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Upload to Appetize.io (v2 API)
+      - name: Upload to Appetize.io
         id: appetize
         env:
           APPETIZE_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
@@ -69,21 +69,30 @@ jobs:
           echo "Requesting direct upload URL from Appetize.io v2 API..."
           RESPONSE=$(curl -s -X POST "https://api.appetize.io/v2/apps/direct-upload-url" \
             -H "Authorization: Bearer $APPETIZE_TOKEN" \
-            -H "Content-Type: application/json")
+            -H "Content-Type: application/json" \
+            -d '{}')
 
           UPLOAD_URL=$(echo "$RESPONSE" | jq -r '.uploadUrl // empty')
           PUBLIC_KEY=$(echo "$RESPONSE" | jq -r '.publicKey // empty')
 
-          if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
-            echo "API Response: $RESPONSE"
-            echo "🚨 ERROR: Appetize API upload failed! Check your APPETIZE_API_TOKEN secret."
-            exit 1
+          if [ -n "$UPLOAD_URL" ] && [ "$UPLOAD_URL" != "null" ]; then
+            echo "Uploading $APK_PATH via Appetize v2..."
+            curl -s -X PUT -T "$APK_PATH" "$UPLOAD_URL"
+            APP_URL="https://appetize.io/app/$PUBLIC_KEY"
+          else
+            echo "v2 API Response: $RESPONSE"
+            echo "Attempting Appetize v1 endpoint fallback..."
+            V1_RESPONSE=$(curl -s -u "$APPETIZE_TOKEN:" -F "file=@$APK_PATH" -F "platform=android" https://api.appetize.io/v1/apps)
+            PUBLIC_KEY=$(echo "$V1_RESPONSE" | jq -r '.publickey // .publicKey // empty')
+            if [ -n "$PUBLIC_KEY" ] && [ "$PUBLIC_KEY" != "null" ]; then
+              APP_URL="https://appetize.io/app/$PUBLIC_KEY"
+            else
+              echo "v1 API Response: $V1_RESPONSE"
+              echo "🚨 ERROR: Appetize API upload failed. Please verify your APPETIZE_API_TOKEN in GitHub Repository Settings -> Secrets."
+              exit 1
+            fi
           fi
 
-          echo "Uploading $APK_PATH..."
-          curl -s -X PUT -T "$APK_PATH" "$UPLOAD_URL"
-
-          APP_URL="https://appetize.io/app/$PUBLIC_KEY"
           echo "app-url=$APP_URL" >> $GITHUB_OUTPUT
           echo "🎉 Appetize Preview URL: $APP_URL"
 
