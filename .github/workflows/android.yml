@@ -1,4 +1,4 @@
-name: Android CI
+name: Android CI & Appetize Preview
 
 on:
   push:
@@ -7,28 +7,77 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v5
+      - name: Checkout Code
+        uses: actions/checkout@v5
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v5
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v5
-      with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload to Appetize.io (v2 API)
+        if: ${{ secrets.APPETIZE_API_TOKEN != '' }}
+        id: appetize
+        run: |
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "🚨 Error: APK not found at $APK_PATH"
+            exit 1
+          fi
+
+          echo "Requesting direct upload URL from Appetize.io v2 API..."
+          RESPONSE=$(curl -s -X POST "https://api.appetize.io/v2/apps/direct-upload-url" \
+            -H "Authorization: Bearer ${{ secrets.APPETIZE_API_TOKEN }}" \
+            -H "Content-Type: application/json")
+
+          UPLOAD_URL=$(echo "$RESPONSE" | jq -r '.uploadUrl // empty')
+          PUBLIC_KEY=$(echo "$RESPONSE" | jq -r '.publicKey // empty')
+
+          if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
+            echo "API Response: $RESPONSE"
+            echo "🚨 ERROR: Appetize API upload failed! Check your APPETIZE_API_TOKEN secret."
+            exit 1
+          fi
+
+          echo "Uploading $APK_PATH..."
+          curl -s -X PUT -T "$APK_PATH" "$UPLOAD_URL"
+
+          APP_URL="https://appetize.io/app/$PUBLIC_KEY"
+          echo "app-url=$APP_URL" >> $GITHUB_OUTPUT
+          echo "🎉 Appetize Preview URL: $APP_URL"
+
+      - name: Post Preview Link to PR Comment
+        if: github.event_name == 'pull_request' && steps.appetize.outputs.app-url != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const appUrl = '${{ steps.appetize.outputs.app-url }}';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### 📱 In-Browser Android Preview Ready!\n\nClick to launch and test this build in your browser:\n[**Launch Precord on Appetize.io**](${appUrl})`
+            });
