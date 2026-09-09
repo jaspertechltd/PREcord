@@ -32,6 +32,11 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
+      - name: Locate APK File
+        run: |
+          echo "Locating built APK..."
+          find . -name "*.apk"
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v5
         with:
@@ -39,18 +44,31 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload to Appetize.io (v2 API)
-        if: ${{ secrets.APPETIZE_API_TOKEN != '' }}
         id: appetize
+        env:
+          APPETIZE_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
         run: |
+          if [ -z "$APPETIZE_TOKEN" ]; then
+            echo "ℹ️ APPETIZE_API_TOKEN secret is not set. Skipping Appetize upload."
+            exit 0
+          fi
+
           APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
           if [ ! -f "$APK_PATH" ]; then
-            echo "🚨 Error: APK not found at $APK_PATH"
-            exit 1
+            echo "Searching for built APK..."
+            FOUND_APK=$(find . -name "*.apk" | head -n 1)
+            if [ -n "$FOUND_APK" ]; then
+              APK_PATH="$FOUND_APK"
+              echo "Found APK at $APK_PATH"
+            else
+              echo "🚨 Error: No APK file found in build outputs!"
+              exit 1
+            fi
           fi
 
           echo "Requesting direct upload URL from Appetize.io v2 API..."
           RESPONSE=$(curl -s -X POST "https://api.appetize.io/v2/apps/direct-upload-url" \
-            -H "Authorization: Bearer ${{ secrets.APPETIZE_API_TOKEN }}" \
+            -H "Authorization: Bearer $APPETIZE_TOKEN" \
             -H "Content-Type: application/json")
 
           UPLOAD_URL=$(echo "$RESPONSE" | jq -r '.uploadUrl // empty')
