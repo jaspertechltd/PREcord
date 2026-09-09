@@ -9,3 +9,7 @@
 ## 2024-05-24 - GitHub Actions Action Version
 **Learning:** `appetizeio/github-action-appetize` does not have a `v1` tag. Must use a specific version like `v1.1.0`.
 **Action:** Always check available tags for GitHub Actions if a short version tag like `v1` fails.
+
+## 2024-05-24 - GitHub Actions Appetize Parameters
+**Learning:** `appetizeio/github-action-appetize` uses `apiToken` and `appFile` rather than `api-token` and `file-path`.
+**Action:** Always check the action inputs definition or valid inputs error.
