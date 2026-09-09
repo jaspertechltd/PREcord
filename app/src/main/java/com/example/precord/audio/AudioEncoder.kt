@@ -113,9 +113,8 @@ object AudioEncoder {
         return try {
             val codecName = findEncoder("audio/flac")
             if (codecName == null) {
-                // Fallback to WAV if no FLAC encoder
-                return encodeToWav(pcmData, sampleRate, channels, bitsPerSample,
-                    File(outputFile.absolutePath.replace(".flac", ".wav")))
+                // Fallback to WAV using outputFile directly
+                return encodeToWav(pcmData, sampleRate, channels, bitsPerSample, outputFile)
             }
 
             val codec = MediaCodec.createByCodecName(codecName)
@@ -136,9 +135,8 @@ object AudioEncoder {
             true
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback to WAV
-            encodeToWav(pcmData, sampleRate, channels, bitsPerSample,
-                File(outputFile.absolutePath.replace(".flac", ".wav")))
+            // Fallback to WAV using outputFile directly
+            encodeToWav(pcmData, sampleRate, channels, bitsPerSample, outputFile)
         }
     }
 
@@ -150,14 +148,12 @@ object AudioEncoder {
         outputFile: File,
         format: Format
     ): Boolean {
-        val mimeType = format.mimeType ?: return false
+        val mimeType = format.mimeType
+            ?: return encodeToWav(pcmData, sampleRate, channels, bitsPerSample, outputFile)
+
         return try {
             val codecName = findEncoder(mimeType)
-            if (codecName == null) {
-                // Fallback to WAV if encoder not available
-                val wavFile = File(outputFile.parent, outputFile.nameWithoutExtension + ".wav")
-                return encodeToWav(pcmData, sampleRate, channels, bitsPerSample, wavFile)
-            }
+                ?: return encodeToWav(pcmData, sampleRate, channels, bitsPerSample, outputFile)
 
             val codec = MediaCodec.createByCodecName(codecName)
             val mediaFormat = MediaFormat.createAudioFormat(mimeType, sampleRate, channels)
@@ -176,9 +172,8 @@ object AudioEncoder {
             true
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback to WAV
-            val wavFile = File(outputFile.parent, outputFile.nameWithoutExtension + ".wav")
-            encodeToWav(pcmData, sampleRate, channels, bitsPerSample, wavFile)
+            // Fallback to WAV using outputFile directly
+            encodeToWav(pcmData, sampleRate, channels, bitsPerSample, outputFile)
         }
     }
 

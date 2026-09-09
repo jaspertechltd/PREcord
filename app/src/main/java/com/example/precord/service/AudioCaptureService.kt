@@ -397,99 +397,115 @@ class AudioCaptureService : Service() {
         durationMs: Long,
         format: AudioEncoder.Format
     ): String? {
-        val musicDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Precord")
-        if (!musicDir.exists()) {
-            musicDir.mkdirs()
-        }
-
-        val outputFile = File(musicDir, fileName)
-
-        val success = AudioEncoder.encodeToFormat(
-            pcmData = pcmData,
-            sampleRate = config.sampleRate,
-            channels = config.channels,
-            bitsPerSample = config.bitsPerSample,
-            format = format,
-            outputFile = outputFile
-        )
-
-        if (success) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val mimeType = when (format) {
-                    AudioEncoder.Format.WAV -> "audio/wav"
-                    AudioEncoder.Format.MP3 -> "audio/mpeg"
-                    AudioEncoder.Format.AIFF -> "audio/aiff"
-                    AudioEncoder.Format.OGG -> "audio/ogg"
-                    AudioEncoder.Format.FLAC -> "audio/flac"
-                }
-                val values = ContentValues().apply {
-                    put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
-                    put(MediaStore.Audio.Media.MIME_TYPE, mimeType)
-                    put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/Precord")
-                    put(MediaStore.Audio.Media.IS_PENDING, 1)
-                }
-
-                val resolver = contentResolver
-                val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
-
-                uri?.let {
-                    resolver.openOutputStream(it)?.use { os ->
-                        outputFile.inputStream().use { input ->
-                            input.copyTo(os)
-                        }
-                    }
-                    values.clear()
-                    values.put(MediaStore.Audio.Media.IS_PENDING, 0)
-                    resolver.update(uri, values, null, null)
-                }
+        return try {
+            val musicDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Precord")
+            if (!musicDir.exists()) {
+                musicDir.mkdirs()
             }
 
-            val capturedFile = CapturedFile(
-                filePath = outputFile.absolutePath,
-                fileName = fileName,
-                timestamp = timestamp,
-                durationMs = durationMs,
-                fileSizeBytes = outputFile.length()
+            val outputFile = File(musicDir, fileName)
+
+            val success = AudioEncoder.encodeToFormat(
+                pcmData = pcmData,
+                sampleRate = config.sampleRate,
+                channels = config.channels,
+                bitsPerSample = config.bitsPerSample,
+                format = format,
+                outputFile = outputFile
             )
 
-            _capturedFiles.value = _capturedFiles.value + capturedFile
-
-            // Pro features: auto-enhance, sound detection bookmarks, cloud upload
-            if (prefs.isPro) {
-                serviceScope.launch {
-                    // Auto-enhance if enabled
-                    if (prefs.autoEnhance && (format == AudioEncoder.Format.WAV || format == AudioEncoder.Format.AIFF)) {
-                        val success = AudioEnhancer.enhanceFile(outputFile, config.sampleRate, config.channels, config.bitsPerSample)
-                        if (success) CaptureMetadataStore.setEnhanced(outputFile.absolutePath)
-                    }
-
-                    // Sound detection: auto-generate bookmarks
-                    if (prefs.soundDetectionEnabled) {
-                        val events = SoundDetector.detectTransitions(
-                            pcmData = pcmData,
-                            sampleRate = config.sampleRate,
-                            channels = config.channels,
-                            silenceThresholdDb = prefs.silenceThresholdDb
-                        )
-                        if (events.isNotEmpty()) {
-                            CaptureMetadataStore.setBookmarks(
-                                outputFile.absolutePath,
-                                events.map { CaptureMetadataStore.BookmarkEntry(it.offsetMs, it.label) }
-                            )
+            if (success && outputFile.exists()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        val mimeType = when (format) {
+                            AudioEncoder.Format.WAV -> "audio/wav"
+                            AudioEncoder.Format.MP3 -> "audio/mpeg"
+                            AudioEncoder.Format.AIFF -> "audio/aiff"
+                            AudioEncoder.Format.OGG -> "audio/ogg"
+                            AudioEncoder.Format.FLAC -> "audio/flac"
                         }
-                    }
+                        val values = ContentValues().apply {
+                            put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
+                            put(MediaStore.Audio.Media.MIME_TYPE, mimeType)
+                            put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/Precord")
+                            put(MediaStore.Audio.Media.IS_PENDING, 1)
+                        }
 
-                    // Cloud upload if configured
-                    if (prefs.cloudUploadEnabled) {
-                        CloudUploadManager.uploadFile(this@AudioCaptureService, outputFile)
+                        val resolver = contentResolver
+                        val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
+
+                        uri?.let {
+                            resolver.openOutputStream(it)?.use { os ->
+                                if (outputFile.exists()) {
+                                    outputFile.inputStream().use { input ->
+                                        input.copyTo(os)
+                                    }
+                                }
+                            }
+                            values.clear()
+                            values.put(MediaStore.Audio.Media.IS_PENDING, 0)
+                            resolver.update(uri, values, null, null)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
                 }
+
+                val capturedFile = CapturedFile(
+                    filePath = outputFile.absolutePath,
+                    fileName = fileName,
+                    timestamp = timestamp,
+                    durationMs = durationMs,
+                    fileSizeBytes = outputFile.length()
+                )
+
+                _capturedFiles.value = _capturedFiles.value + capturedFile
+
+                // Show toast "HH:MM:SS capture saved!"
+                val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(timestamp))
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    Toast.makeText(applicationContext, "$timeStr capture saved!", Toast.LENGTH_SHORT).show()
+                }
+
+                // Pro features: auto-enhance, sound detection bookmarks, cloud upload
+                if (prefs.isPro) {
+                    serviceScope.launch {
+                        // Auto-enhance if enabled
+                        if (prefs.autoEnhance && (format == AudioEncoder.Format.WAV || format == AudioEncoder.Format.AIFF)) {
+                            val enhanceSuccess = AudioEnhancer.enhanceFile(outputFile, config.sampleRate, config.channels, config.bitsPerSample)
+                            if (enhanceSuccess) CaptureMetadataStore.setEnhanced(outputFile.absolutePath)
+                        }
+
+                        // Sound detection: auto-generate bookmarks
+                        if (prefs.soundDetectionEnabled) {
+                            val events = SoundDetector.detectTransitions(
+                                pcmData = pcmData,
+                                sampleRate = config.sampleRate,
+                                channels = config.channels,
+                                silenceThresholdDb = prefs.silenceThresholdDb
+                            )
+                            if (events.isNotEmpty()) {
+                                CaptureMetadataStore.setBookmarks(
+                                    outputFile.absolutePath,
+                                    events.map { CaptureMetadataStore.BookmarkEntry(it.offsetMs, it.label) }
+                                )
+                            }
+                        }
+
+                        // Cloud upload if configured
+                        if (prefs.cloudUploadEnabled) {
+                            CloudUploadManager.uploadFile(this@AudioCaptureService, outputFile)
+                        }
+                    }
+                }
+
+                return outputFile.absolutePath
             }
-
-            return outputFile.absolutePath
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
-
-        return null
     }
 
     private fun formatDuration(seconds: Int): String {
