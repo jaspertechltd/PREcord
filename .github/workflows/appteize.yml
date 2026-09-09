@@ -32,26 +32,34 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      - name: Upload to Appetize
+      - name: Upload to Appetize.io via REST API
         id: appetize
-        uses: appetizeio/appetize-github-action@v1
-        with:
-          api-token: ${{ secrets.APPETIZE_API_TOKEN }}
-          file-path: app/build/outputs/apk/debug/app-debug.apk
-          platform: android
-
-      - name: Output Stream URL
         run: |
-          echo "Stream your build in-browser at: ${{ steps.appetize.outputs.app-url }}"
+          RESPONSE=$(curl --silent --show-error --location \
+            --request POST 'https://api.appetize.io/v2/apps' \
+            --header "Authorization: Bearer ${{ secrets.APPETIZE_API_TOKEN }}" \
+            --form "file=@app/build/outputs/apk/debug/app-debug.apk" \
+            --form "platform=android")
+
+          echo "API Response: $RESPONSE"
+          APP_URL=$(echo "$RESPONSE" | jq -r '.appURL')
+
+          if [ "$APP_URL" == "null" ] || [ -z "$APP_URL" ]; then
+            echo "Appetize API upload failed!"
+            exit 1
+          fi
+
+          echo "app-url=$APP_URL" >> $GITHUB_OUTPUT
 
       - name: Post Link to PR Comment
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
+            const appUrl = '${{ steps.appetize.outputs.app-url }}';
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### 📱 In-Browser Android Preview Ready!\n\nClick to launch and interact with this build:\n[**Launch on Appetize.io**](${{ steps.appetize.outputs.app-url }})`
+              body: `### 📱 In-Browser Android Preview Ready!\n\nClick to launch and interact with this build:\n[**Launch on Appetize.io**](${appUrl})`
             });
