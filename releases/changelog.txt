@@ -1,0 +1,1 @@
+* Fix duplicate file creation & 0:00 duration display, and generate v1.0 release APK (ee09d79)
