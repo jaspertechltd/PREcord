@@ -86,15 +86,19 @@ class RingBuffer(val capacity: Int) {
             
             if (total16BitSamples == 0) return result
             
-            val data = snapshot()
             val step = total16BitSamples.toDouble() / numSamples
+            val startOffset = if (isFull) writePos else 0
             
             for (i in 0 until numSamples) {
                 val sampleIndex = (i * step).toInt()
                 if (sampleIndex >= total16BitSamples) break
-                val byteIndex = sampleIndex * 2
-                val low = data[byteIndex].toInt() and 0xFF
-                val high = data[byteIndex + 1].toInt()
+                val logicalByteIndex = sampleIndex * 2
+
+                val physicalByteIndex = (startOffset + logicalByteIndex) % capacity
+                val nextPhysicalByteIndex = (physicalByteIndex + 1) % capacity
+
+                val low = buffer[physicalByteIndex].toInt() and 0xFF
+                val high = buffer[nextPhysicalByteIndex].toInt()
                 val sampleValue = (high shl 8) or low
                 // Normalize -32768..32767 to -1.0..1.0
                 result[i] = sampleValue / 32768.0f
