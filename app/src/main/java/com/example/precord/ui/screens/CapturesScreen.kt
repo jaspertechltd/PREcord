@@ -124,13 +124,43 @@ fun CapturesScreen(
                 }
             }
             
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(filteredCaptures) { capture ->
-                    val metadata = CaptureMetadataStore.load(capture.filePath)
+            if (filteredCaptures.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = if (captures.isEmpty()) Icons.Default.MicNone else Icons.Default.SearchOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = if (captures.isEmpty()) "No Captures Yet" else "No Matches Found",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (captures.isEmpty())
+                            "Tap the Capture button on the main screen to save a retroactive audio moment."
+                        else
+                            "Try adjusting your search query or filters to find what you're looking for.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredCaptures) { capture ->
+                        val metadata = CaptureMetadataStore.load(capture.filePath)
                     var isFavorite by remember(capture.filePath) { mutableStateOf(metadata.isFavorite) }
                     var tags by remember(capture.filePath) { mutableStateOf(metadata.tags.toList()) }
                     var isEnhanced by remember(capture.filePath) { mutableStateOf(metadata.isEnhanced) }
@@ -442,6 +472,7 @@ fun CapturesScreen(
                         )
                     }
                 }
+            }
             }
         }
     }
