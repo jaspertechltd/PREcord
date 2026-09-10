@@ -167,8 +167,9 @@ fun CapturesScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     val dateStr = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(capture.timestamp))
+                                    val durationStr = formatDurationMs(capture.durationMs)
                                     Text(
-                                        text = "$dateStr • ${capture.durationMs / 1000}s",
+                                        text = "$dateStr • $durationStr",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -456,12 +457,37 @@ fun getCaptures(context: Context): List<CapturedFile> {
     return dir.listFiles()?.filter { file ->
         file.isFile && extensions.any { file.name.endsWith(".$it", ignoreCase = true) }
     }?.map { file ->
+        val duration = getAudioDurationMs(file)
         CapturedFile(
             filePath = file.absolutePath,
             fileName = file.name,
             timestamp = file.lastModified(),
-            durationMs = 0L, // Need MediaMetadataRetriever for real duration if needed
+            durationMs = duration,
             fileSizeBytes = file.length()
         )
     }?.sortedByDescending { it.timestamp } ?: emptyList()
+}
+
+private fun getAudioDurationMs(file: File): Long {
+    return try {
+        val retriever = android.media.MediaMetadataRetriever()
+        retriever.setDataSource(file.absolutePath)
+        val durationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+        retriever.release()
+        durationStr?.toLongOrNull() ?: 0L
+    } catch (_: Exception) {
+        0L
+    }
+}
+
+fun formatDurationMs(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+    }
 }
