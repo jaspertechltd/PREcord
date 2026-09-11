@@ -1,6 +1,6 @@
-## 2024-05-24 - RingBuffer allocation bottleneck during UI rendering
-**Learning:** `RingBuffer.getAmplitudes()` is called frequently (e.g., up to 60fps) by the Compose UI to draw real-time waveforms. The previous implementation called `snapshot()`, forcing an O(N) heap allocation (up to 4 hours of audio = massive MBs) and a full array copy on every single frame just to read 100 samples. This is a severe anti-pattern for Android audio/UI bridges, leading to massive GC thrashing.
-**Action:** Always inspect data extraction methods used by UI loops (like waveforms). Compute direct logical-to-physical index mappings (e.g., using modulo arithmetic for circular buffers) to read directly from the source array instead of allocating intermediate copies.
+## 2024-09-10 - Ring Buffer Snapshot Anti-Pattern
+**Learning:** Frequent calls to a ring buffer's snapshot mechanism in a hot loop (like real-time UI updates for waveforms) can cause massive memory allocations and garbage collection pauses, leading to frame drops or OutOfMemoryErrors, especially with large buffer sizes (e.g., 4 hours of audio = 1.2GB). `RingBuffer.getAmplitudes()` is called frequently (e.g., up to 60fps) by the Compose UI to draw real-time waveforms.
+**Action:** When deriving sparse metrics (like amplitudes) from a large circular buffer, calculate logical indices and map them directly to the underlying physical array using modulo arithmetic to avoid array copying and heap allocations entirely.
 
 ## 2024-05-24 - GitHub Actions Action Name
 **Learning:** Appetizeio GitHub action is named `appetizeio/github-action-appetize`, not `appetizeio/appetize-github-action`.

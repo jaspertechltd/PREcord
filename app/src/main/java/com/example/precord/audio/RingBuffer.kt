@@ -102,7 +102,7 @@ class RingBuffer(val capacity: Int) {
 
                 val byteIndex = sampleIndex * 2
                 val actualLowIndex = (startPos + byteIndex) % capacity
-                val actualHighIndex = (startPos + byteIndex + 1) % capacity
+                val actualHighIndex = (actualLowIndex + 1) % capacity
 
                 val low = buffer[actualLowIndex].toInt() and 0xFF
                 val high = buffer[actualHighIndex].toInt()
