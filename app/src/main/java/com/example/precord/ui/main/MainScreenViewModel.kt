@@ -105,7 +105,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startBuffering() {
         val intent = Intent(getApplication(), AudioCaptureService::class.java)
-        getApplication<Application>().startForegroundService(intent)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            getApplication<Application>().startForegroundService(intent)
+        } else {
+            getApplication<Application>().startService(intent)
+        }
         startTimeMs = System.currentTimeMillis()
         _uiState.update { it.copy(isBuffering = true) }
     }

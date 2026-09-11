@@ -38,7 +38,9 @@ class CaptureTileService : TileService() {
 
         qsTile?.apply {
             label = "Precord"
-            subtitle = if (prefs.isPro) "Tap to Capture" else "Pro Only"
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                subtitle = if (prefs.isPro) "Tap to Capture" else "Pro Only"
+            }
             state = if (prefs.isPro) Tile.STATE_INACTIVE else Tile.STATE_UNAVAILABLE
             updateTile()
         }
