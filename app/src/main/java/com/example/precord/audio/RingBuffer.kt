@@ -78,6 +78,13 @@ class RingBuffer(val capacity: Int) {
         }
     }
 
+    /**
+     * Extracts an array of amplitude values for drawing waveforms.
+     * ⚡ Bolt Optimization:
+     * We avoid allocating a huge temporary array by snapshot() which copies the *entire* buffer.
+     * Instead, we compute the mapped modulo index and read directly from the ring buffer.
+     * Expected Performance Impact: Eliminates an O(N) heap allocation per UI frame (saving several MB of GC trashing).
+     */
     fun getAmplitudes(numSamples: Int): FloatArray {
         lock.withLock {
             val result = FloatArray(numSamples)
@@ -86,15 +93,19 @@ class RingBuffer(val capacity: Int) {
             
             if (total16BitSamples == 0) return result
             
-            val data = snapshot()
             val step = total16BitSamples.toDouble() / numSamples
+            val startPos = if (isFull) writePos else 0
             
             for (i in 0 until numSamples) {
                 val sampleIndex = (i * step).toInt()
                 if (sampleIndex >= total16BitSamples) break
+
                 val byteIndex = sampleIndex * 2
-                val low = data[byteIndex].toInt() and 0xFF
-                val high = data[byteIndex + 1].toInt()
+                val actualLowIndex = (startPos + byteIndex) % capacity
+                val actualHighIndex = (startPos + byteIndex + 1) % capacity
+
+                val low = buffer[actualLowIndex].toInt() and 0xFF
+                val high = buffer[actualHighIndex].toInt()
                 val sampleValue = (high shl 8) or low
                 // Normalize -32768..32767 to -1.0..1.0
                 result[i] = sampleValue / 32768.0f
