@@ -1,0 +1,1 @@
+sed -i 's/modifier = Modifier.fillMaxWidth(),/modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(vertical = 8.dp),/g' app/src/main/java/com/example/precord/ui/screens/SettingsSheet.kt
