@@ -415,40 +415,22 @@ class AudioCaptureService : Service() {
             )
 
             if (success && outputFile.exists()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    try {
-                        val mimeType = when (format) {
-                            AudioEncoder.Format.WAV -> "audio/wav"
-                            AudioEncoder.Format.MP3 -> "audio/mpeg"
-                            AudioEncoder.Format.AIFF -> "audio/aiff"
-                            AudioEncoder.Format.OGG -> "audio/ogg"
-                            AudioEncoder.Format.FLAC -> "audio/flac"
-                        }
-                        val values = ContentValues().apply {
-                            put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
-                            put(MediaStore.Audio.Media.MIME_TYPE, mimeType)
-                            put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/Precord")
-                            put(MediaStore.Audio.Media.IS_PENDING, 1)
-                        }
-
-                        val resolver = contentResolver
-                        val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
-
-                        uri?.let {
-                            resolver.openOutputStream(it)?.use { os ->
-                                if (outputFile.exists()) {
-                                    outputFile.inputStream().use { input ->
-                                        input.copyTo(os)
-                                    }
-                                }
-                            }
-                            values.clear()
-                            values.put(MediaStore.Audio.Media.IS_PENDING, 0)
-                            resolver.update(uri, values, null, null)
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                try {
+                    val mimeType = when (format) {
+                        AudioEncoder.Format.WAV -> "audio/wav"
+                        AudioEncoder.Format.MP3 -> "audio/mpeg"
+                        AudioEncoder.Format.AIFF -> "audio/aiff"
+                        AudioEncoder.Format.OGG -> "audio/ogg"
+                        AudioEncoder.Format.FLAC -> "audio/flac"
                     }
+                    android.media.MediaScannerConnection.scanFile(
+                        applicationContext,
+                        arrayOf(outputFile.absolutePath),
+                        arrayOf(mimeType),
+                        null
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
 
                 val capturedFile = CapturedFile(

@@ -1,3 +1,5 @@
+* Fix duplicate file creation & 0:00 duration display, and generate v1.0 release APK (ee09d79)
+Fix compilation error in MainScreenViewModelTest.kt
 31bde42 Update Appetize GitHub Action version
 69dd340 Fix Appetize GitHub Action reference
 143275e Automated nightly test report and build artifacts
