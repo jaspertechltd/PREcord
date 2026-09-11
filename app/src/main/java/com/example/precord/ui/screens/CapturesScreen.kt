@@ -124,13 +124,43 @@ fun CapturesScreen(
                 }
             }
             
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(filteredCaptures) { capture ->
-                    val metadata = CaptureMetadataStore.load(capture.filePath)
+            if (filteredCaptures.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = if (captures.isEmpty()) Icons.Default.MicNone else Icons.Default.SearchOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = if (captures.isEmpty()) "No Captures Yet" else "No Matches Found",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (captures.isEmpty())
+                            "Tap the Capture button on the main screen to save a retroactive audio moment."
+                        else
+                            "Try adjusting your search query or filters to find what you're looking for.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredCaptures) { capture ->
+                        val metadata = CaptureMetadataStore.load(capture.filePath)
                     var isFavorite by remember(capture.filePath) { mutableStateOf(metadata.isFavorite) }
                     var tags by remember(capture.filePath) { mutableStateOf(metadata.tags.toList()) }
                     var isEnhanced by remember(capture.filePath) { mutableStateOf(metadata.isEnhanced) }
@@ -167,8 +197,9 @@ fun CapturesScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     val dateStr = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(capture.timestamp))
+                                    val durationStr = formatDurationMs(capture.durationMs)
                                     Text(
-                                        text = "$dateStr • ${capture.durationMs / 1000}s",
+                                        text = "$dateStr • $durationStr",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -443,6 +474,7 @@ fun CapturesScreen(
                     }
                 }
             }
+            }
         }
     }
 }
@@ -456,12 +488,37 @@ fun getCaptures(context: Context): List<CapturedFile> {
     return dir.listFiles()?.filter { file ->
         file.isFile && extensions.any { file.name.endsWith(".$it", ignoreCase = true) }
     }?.map { file ->
+        val duration = getAudioDurationMs(file)
         CapturedFile(
             filePath = file.absolutePath,
             fileName = file.name,
             timestamp = file.lastModified(),
-            durationMs = 0L, // Need MediaMetadataRetriever for real duration if needed
+            durationMs = duration,
             fileSizeBytes = file.length()
         )
     }?.sortedByDescending { it.timestamp } ?: emptyList()
+}
+
+private fun getAudioDurationMs(file: File): Long {
+    return try {
+        val retriever = android.media.MediaMetadataRetriever()
+        retriever.setDataSource(file.absolutePath)
+        val durationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+        retriever.release()
+        durationStr?.toLongOrNull() ?: 0L
+    } catch (_: Exception) {
+        0L
+    }
+}
+
+fun formatDurationMs(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+    }
 }
