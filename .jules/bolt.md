@@ -13,3 +13,7 @@
 ## 2024-05-24 - GitHub Actions Appetize Parameters
 **Learning:** `appetizeio/github-action-appetize` uses `apiToken` and `appFile` rather than `api-token` and `file-path`.
 **Action:** Always check the action inputs definition or valid inputs error.
+
+## 2024-05-25 - Avoid allocations inside Compose Canvas draw phase
+**Learning:** In Compose, the `Canvas` drawing scope runs very frequently, potentially at 60-120 frames per second. Allocating memory inside this block (e.g., using `sliceArray` or implicit object creation like `IntProgression` via `.reversed()`) triggers rapid garbage collection, which leads to UI jank or dropped frames.
+**Action:** When rendering data structures continuously (like waveforms), extract only primitive values using direct array indexing and manual iteration (e.g., `downTo`) to achieve zero-allocation draw loops.

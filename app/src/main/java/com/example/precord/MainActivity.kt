@@ -55,7 +55,11 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         ) {
             val intent = Intent(this, AudioCaptureService::class.java)
-            startForegroundService(intent)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
         }
 
         // Only bind to the service if onboarding is done (service may not exist yet)

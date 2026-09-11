@@ -33,16 +33,15 @@ fun WaveformVisualizer(
         val totalBarWidth = barWidthPx + spacingPx
 
         val maxBars = (width / totalBarWidth).toInt()
-        val displayAmplitudes = if (amplitudes.size > maxBars) {
-            amplitudes.sliceArray((amplitudes.size - maxBars) until amplitudes.size)
-        } else {
-            amplitudes
-        }
+        // ⚡ Bolt Optimization:
+        // Avoid allocating a new FloatArray via sliceArray on every draw frame.
+        // Also avoid allocating an IntProgression via .reversed()
+        val startIndex = if (amplitudes.size > maxBars) amplitudes.size - maxBars else 0
 
         var startX = width - barWidthPx
 
-        for (i in displayAmplitudes.indices.reversed()) {
-            val amp = displayAmplitudes[i]
+        for (i in (amplitudes.size - 1) downTo startIndex) {
+            val amp = amplitudes[i]
             val normalizedAmp = abs(amp).coerceIn(0f, 1f)
             val barHeightPx = (normalizedAmp * height).coerceAtLeast(minHeightPx)
 
