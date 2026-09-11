@@ -1,2 +1,3 @@
+* Fix duplicate file creation & 0:00 duration display, and generate v1.0 release APK (ee09d79)
 Fix compilation error in MainScreenViewModelTest.kt
 e27d0c4 Upgrade GitHub Actions to v5 to resolve Node 20 and setup-java v4 deprecation warnings
