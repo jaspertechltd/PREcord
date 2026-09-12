@@ -1,4 +1,3 @@
-## 2025-01-25 - Investigate Accessibility\n**Learning:** In Compose, some icons are missing or incorrectly setting `contentDescription = null` without adding alternative context for screen readers.\n**Action:** Replaced `contentDescription = null` with a meaningful description where relevant.
-## 2024-09-11 - Making switch rows clickable
-**Learning:** In Compose, users expect the entire row containing a label, description, and Switch to be clickable, not just the switch itself. Making only the switch clickable reduces accessibility and tap targets.
-**Action:** Use `.clickable(role = Role.Switch) { onCheckedChange(!checked) }` on the parent `Row` and set the Switch's `onCheckedChange` to `null` to delegate events properly.
+## 2024-05-30 - Compose Toggleable Accessibility
+**Learning:** In Jetpack Compose, when building custom switches or toggle rows, `Modifier.toggleable` is preferred over `Modifier.clickable(role = Role.Switch)`. `toggleable` natively manages and communicates the checked state to accessibility services (like TalkBack), whereas `clickable` alone with a role does not reliably announce state changes without manual semantics overrides.
+**Action:** Always use `Modifier.toggleable` for components representing on/off or true/false states.
