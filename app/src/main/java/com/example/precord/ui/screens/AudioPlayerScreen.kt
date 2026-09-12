@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.io.File
 import java.io.FileInputStream
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
@@ -480,39 +481,55 @@ private fun formatTimeMs(ms: Int): String {
 private fun generateWaveform(filePath: String, numBars: Int): FloatArray {
     return try {
         val file = File(filePath)
-        val bytes = file.readBytes()
+        val fileLen = file.length()
+        val result = FloatArray(numBars) { 0.2f }
+        if (fileLen == 0L) return result
 
-        // Find PCM data region
-        val pcmOffset = when (file.extension.lowercase()) {
-            "wav" -> findWavDataOffset(bytes)
-            "aiff" -> 72
-            else -> return FloatArray(numBars) { 0.2f } // Compressed formats: show flat waveform
-        }
+        val isWav = file.extension.lowercase() == "wav"
+        val isAiff = file.extension.lowercase() == "aiff"
+        if (!isWav && !isAiff) return result // Compressed formats: show flat waveform
 
-        if (pcmOffset < 0 || pcmOffset >= bytes.size) return FloatArray(numBars) { 0.2f }
+        RandomAccessFile(file, "r").use { raf ->
+            val pcmOffset = if (isWav) {
+                // Read a small header to find data chunk offset
+                val header = ByteArray(100)
+                raf.read(header)
+                findWavDataOffset(header).toLong()
+            } else 72L
 
-        val pcmData = bytes.copyOfRange(pcmOffset, bytes.size)
-        val totalSamples = pcmData.size / 2
-        if (totalSamples < numBars) return FloatArray(numBars) { 0.2f }
+            if (pcmOffset < 0 || pcmOffset >= fileLen) return result
 
-        val samplesPerBar = totalSamples / numBars
-        val result = FloatArray(numBars)
+            val dataLen = fileLen - pcmOffset
+            val totalSamples = dataLen / 2
+            if (totalSamples < numBars) return result
 
-        for (i in 0 until numBars) {
-            var maxAmp = 0
-            val startSample = i * samplesPerBar
-            for (j in 0 until samplesPerBar) {
-                val idx = (startSample + j) * 2
-                if (idx + 1 < pcmData.size) {
-                    val low = pcmData[idx].toInt() and 0xFF
-                    val high = pcmData[idx + 1].toInt()
-                    val sample = abs((high shl 8) or low)
-                    maxAmp = max(maxAmp, sample)
+            val samplesPerBar = totalSamples / numBars
+
+            // ⚡ Bolt Optimization:
+            // Instead of reading the entire file into memory and processing all samples,
+            // we sample exactly up to 1024 points evenly spread across each bar's chunk.
+            // This turns an O(N) memory allocation and processing time into O(1) memory and O(numBars).
+            val samplesToRead = min(samplesPerBar, 1024L).toInt()
+            val stepSamples = max(1, (samplesPerBar / samplesToRead).toInt())
+            val buffer = ByteArray(2)
+
+            for (i in 0 until numBars) {
+                var maxAmp = 0
+                for (s in 0 until samplesToRead) {
+                    val sampleOffset = i * samplesPerBar + s * stepSamples
+                    if (sampleOffset >= totalSamples) break
+
+                    raf.seek(pcmOffset + sampleOffset * 2)
+                    if (raf.read(buffer) == 2) {
+                        val low = buffer[0].toInt() and 0xFF
+                        val high = buffer[1].toInt()
+                        val sample = abs((high shl 8) or low)
+                        maxAmp = max(maxAmp, sample)
+                    }
                 }
+                result[i] = maxAmp / 32768f
             }
-            result[i] = maxAmp / 32768f
         }
-
         result
     } catch (_: Exception) {
         FloatArray(numBars) { 0.2f }
