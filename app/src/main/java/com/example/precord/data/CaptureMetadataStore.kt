@@ -4,12 +4,17 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages JSON sidecar metadata files alongside audio captures.
  * Each capture gets a .json file with tags, transcript, bookmarks, favorite status.
  */
 object CaptureMetadataStore {
+
+    // ⚡ Bolt Optimization:
+    // In-memory cache to prevent N+1 disk reads when scrolling the captures list.
+    private val metadataCache = ConcurrentHashMap<String, CaptureMetadata>()
 
     data class CaptureMetadata(
         val tags: MutableList<String> = mutableListOf(),
@@ -30,8 +35,15 @@ object CaptureMetadataStore {
     }
 
     fun load(audioFilePath: String): CaptureMetadata {
+        // Return cached version if available
+        metadataCache[audioFilePath]?.let { return it }
+
         val file = metadataFile(audioFilePath)
-        if (!file.exists()) return CaptureMetadata()
+        if (!file.exists()) {
+            val defaultMetadata = CaptureMetadata()
+            metadataCache[audioFilePath] = defaultMetadata
+            return defaultMetadata
+        }
 
         return try {
             val json = JSONObject(file.readText())
@@ -46,19 +58,26 @@ object CaptureMetadataStore {
                     bookmarks.add(BookmarkEntry(bm.getLong("offsetMs"), bm.optString("label", "")))
                 }
             }
-            CaptureMetadata(
+            val loadedMetadata = CaptureMetadata(
                 tags = tags,
                 isFavorite = json.optBoolean("isFavorite", false),
                 transcript = if (json.has("transcript")) json.getString("transcript") else null,
                 bookmarks = bookmarks,
                 isEnhanced = json.optBoolean("isEnhanced", false)
             )
+            metadataCache[audioFilePath] = loadedMetadata
+            loadedMetadata
         } catch (_: Exception) {
-            CaptureMetadata()
+            val defaultMetadata = CaptureMetadata()
+            metadataCache[audioFilePath] = defaultMetadata
+            defaultMetadata
         }
     }
 
     fun save(audioFilePath: String, metadata: CaptureMetadata) {
+        // Update cache immediately
+        metadataCache[audioFilePath] = metadata
+
         val file = metadataFile(audioFilePath)
         try {
             val json = JSONObject().apply {
@@ -116,6 +135,7 @@ object CaptureMetadataStore {
     }
 
     fun delete(audioFilePath: String) {
+        metadataCache.remove(audioFilePath)
         metadataFile(audioFilePath).delete()
     }
 
