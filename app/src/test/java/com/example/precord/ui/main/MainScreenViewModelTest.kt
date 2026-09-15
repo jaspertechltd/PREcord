@@ -1,7 +1,6 @@
 package com.example.precord.ui.main
 
 import android.app.Application
-import android.content.Context
 import android.content.SharedPreferences
 import junit.framework.TestCase.assertEquals
 import kotlinx.coroutines.flow.first
@@ -41,13 +40,5 @@ class MainScreenViewModelTest {
     val viewModel = MainViewModel(application)
     val state = viewModel.uiState.first()
     assertEquals(false, state.isBuffering)
-  }
-import org.junit.Test
-import junit.framework.TestCase.assertTrue
-
-class MainScreenViewModelTest {
-  @Test
-  fun dummyTest() {
-    assertTrue(true)
   }
 }
