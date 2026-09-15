@@ -17,3 +17,7 @@
 ## 2024-05-25 - Avoid allocations inside Compose Canvas draw phase
 **Learning:** In Compose, the `Canvas` drawing scope runs very frequently, potentially at 60-120 frames per second. Allocating memory inside this block (e.g., using `sliceArray` or implicit object creation like `IntProgression` via `.reversed()`) triggers rapid garbage collection, which leads to UI jank or dropped frames.
 **Action:** When rendering data structures continuously (like waveforms), extract only primitive values using direct array indexing and manual iteration (e.g., `downTo`) to achieve zero-allocation draw loops.
+
+## 2026-09-15 - JSON Read Bottleneck in Compose rendering
+**Learning:** Reading JSON sidecar files (like metadata) synchronously from disk during Jetpack Compose `LazyColumn` rendering causes severe N+1 performance jank due to high-frequency layout and composition passes.
+**Action:** Use an in-memory cache (like `ConcurrentHashMap`) to map metadata objects to file paths to ensure fast, synchronous metadata reads during Compose state recalculations.

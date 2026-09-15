@@ -4,6 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages JSON sidecar metadata files alongside audio captures.
@@ -24,41 +25,49 @@ object CaptureMetadataStore {
         val label: String
     )
 
+    // Cache metadata in memory to avoid N+1 disk reads during Compose LazyColumn rendering
+    private val metadataCache = ConcurrentHashMap<String, CaptureMetadata>()
+
     private fun metadataFile(audioFilePath: String): File {
         val audioFile = File(audioFilePath)
         return File(audioFile.parent, audioFile.nameWithoutExtension + ".meta.json")
     }
 
     fun load(audioFilePath: String): CaptureMetadata {
-        val file = metadataFile(audioFilePath)
-        if (!file.exists()) return CaptureMetadata()
+        return metadataCache.getOrPut(audioFilePath) {
+            val file = metadataFile(audioFilePath)
+            if (!file.exists()) return@getOrPut CaptureMetadata()
 
-        return try {
-            val json = JSONObject(file.readText())
-            val tags = mutableListOf<String>()
-            json.optJSONArray("tags")?.let { arr ->
-                for (i in 0 until arr.length()) tags.add(arr.getString(i))
-            }
-            val bookmarks = mutableListOf<BookmarkEntry>()
-            json.optJSONArray("bookmarks")?.let { arr ->
-                for (i in 0 until arr.length()) {
-                    val bm = arr.getJSONObject(i)
-                    bookmarks.add(BookmarkEntry(bm.getLong("offsetMs"), bm.optString("label", "")))
+            try {
+                val json = JSONObject(file.readText())
+                val tags = mutableListOf<String>()
+                json.optJSONArray("tags")?.let { arr ->
+                    for (i in 0 until arr.length()) tags.add(arr.getString(i))
                 }
+                val bookmarks = mutableListOf<BookmarkEntry>()
+                json.optJSONArray("bookmarks")?.let { arr ->
+                    for (i in 0 until arr.length()) {
+                        val bm = arr.getJSONObject(i)
+                        bookmarks.add(BookmarkEntry(bm.getLong("offsetMs"), bm.optString("label", "")))
+                    }
+                }
+                CaptureMetadata(
+                    tags = tags,
+                    isFavorite = json.optBoolean("isFavorite", false),
+                    transcript = if (json.has("transcript")) json.getString("transcript") else null,
+                    bookmarks = bookmarks,
+                    isEnhanced = json.optBoolean("isEnhanced", false)
+                )
+            } catch (_: Exception) {
+                CaptureMetadata()
             }
-            CaptureMetadata(
-                tags = tags,
-                isFavorite = json.optBoolean("isFavorite", false),
-                transcript = if (json.has("transcript")) json.getString("transcript") else null,
-                bookmarks = bookmarks,
-                isEnhanced = json.optBoolean("isEnhanced", false)
-            )
-        } catch (_: Exception) {
-            CaptureMetadata()
         }
     }
 
     fun save(audioFilePath: String, metadata: CaptureMetadata) {
+        // Update cache immediately to prevent stale UI
+        metadataCache[audioFilePath] = metadata
+
         val file = metadataFile(audioFilePath)
         try {
             val json = JSONObject().apply {
@@ -116,6 +125,7 @@ object CaptureMetadataStore {
     }
 
     fun delete(audioFilePath: String) {
+        metadataCache.remove(audioFilePath)
         metadataFile(audioFilePath).delete()
     }
 
