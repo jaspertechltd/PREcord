@@ -2,3 +2,6 @@
 ## 2024-09-11 - Making switch rows clickable
 **Learning:** In Compose, users expect the entire row containing a label, description, and Switch to be clickable, not just the switch itself. Making only the switch clickable reduces accessibility and tap targets.
 **Action:** Use `.clickable(role = Role.Switch) { onCheckedChange(!checked) }` on the parent `Row` and set the Switch's `onCheckedChange` to `null` to delegate events properly.
+## 2025-01-25 - Improve Switch Row Accessibility
+**Learning:** In Compose, users expect the entire row containing a label, description, and Switch to be clickable. However, using `.clickable(role = Role.Switch)` prevents screen readers like TalkBack from correctly announcing the state (checked/unchecked).
+**Action:** Use `.toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)` on the parent `Row` to ensure screen readers correctly announce the state, and remove the `onCheckedChange` from the child Switch to delegate events properly.
