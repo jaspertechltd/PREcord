@@ -4,6 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages JSON sidecar metadata files alongside audio captures.
@@ -11,13 +12,23 @@ import java.io.File
  */
 object CaptureMetadataStore {
 
+    private val metadataCache = ConcurrentHashMap<String, CaptureMetadata>()
+
     data class CaptureMetadata(
         val tags: MutableList<String> = mutableListOf(),
         val isFavorite: Boolean = false,
         val transcript: String? = null,
         val bookmarks: List<BookmarkEntry> = emptyList(),
         val isEnhanced: Boolean = false
-    )
+    ) {
+        fun deepCopy() = CaptureMetadata(
+            tags = tags.toMutableList(),
+            isFavorite = isFavorite,
+            transcript = transcript,
+            bookmarks = bookmarks.toList(),
+            isEnhanced = isEnhanced
+        )
+    }
 
     data class BookmarkEntry(
         val offsetMs: Long,
@@ -30,8 +41,14 @@ object CaptureMetadataStore {
     }
 
     fun load(audioFilePath: String): CaptureMetadata {
+        metadataCache[audioFilePath]?.let { return it.deepCopy() }
+
         val file = metadataFile(audioFilePath)
-        if (!file.exists()) return CaptureMetadata()
+        if (!file.exists()) {
+            val emptyMeta = CaptureMetadata()
+            metadataCache[audioFilePath] = emptyMeta.deepCopy()
+            return emptyMeta
+        }
 
         return try {
             val json = JSONObject(file.readText())
@@ -46,19 +63,24 @@ object CaptureMetadataStore {
                     bookmarks.add(BookmarkEntry(bm.getLong("offsetMs"), bm.optString("label", "")))
                 }
             }
-            CaptureMetadata(
+            val meta = CaptureMetadata(
                 tags = tags,
                 isFavorite = json.optBoolean("isFavorite", false),
                 transcript = if (json.has("transcript")) json.getString("transcript") else null,
                 bookmarks = bookmarks,
                 isEnhanced = json.optBoolean("isEnhanced", false)
             )
+            metadataCache[audioFilePath] = meta.deepCopy()
+            meta
         } catch (_: Exception) {
-            CaptureMetadata()
+            val emptyMeta = CaptureMetadata()
+            metadataCache[audioFilePath] = emptyMeta.deepCopy()
+            emptyMeta
         }
     }
 
     fun save(audioFilePath: String, metadata: CaptureMetadata) {
+        metadataCache[audioFilePath] = metadata.deepCopy()
         val file = metadataFile(audioFilePath)
         try {
             val json = JSONObject().apply {
@@ -116,6 +138,7 @@ object CaptureMetadataStore {
     }
 
     fun delete(audioFilePath: String) {
+        metadataCache.remove(audioFilePath)
         metadataFile(audioFilePath).delete()
     }
 

@@ -17,3 +17,7 @@
 ## 2024-05-25 - Avoid allocations inside Compose Canvas draw phase
 **Learning:** In Compose, the `Canvas` drawing scope runs very frequently, potentially at 60-120 frames per second. Allocating memory inside this block (e.g., using `sliceArray` or implicit object creation like `IntProgression` via `.reversed()`) triggers rapid garbage collection, which leads to UI jank or dropped frames.
 **Action:** When rendering data structures continuously (like waveforms), extract only primitive values using direct array indexing and manual iteration (e.g., `downTo`) to achieve zero-allocation draw loops.
+
+## 2024-05-25 - Avoid N+1 file I/O operations for UI rendering loops
+**Learning:** Reading JSON metadata synchronously from disk on every item load inside a Jetpack Compose `LazyColumn` (e.g., via `CaptureMetadataStore.load`) creates a massive N+1 performance jank, blocking UI threads heavily. Not caching negative hits (e.g., when sidecar `.meta.json` files are missing) forces redundant physical file existence checks.
+**Action:** When creating in-memory caching mechanisms (like `ConcurrentHashMap`) for frequently accessed metadata objects, always ensure that missing files or error states cache empty structures so repeated access avoids persistent I/O checks. Additionally, returning a `deepCopy()` of the object containing mutable lists ensures implicit mutations outside the store don't corrupt the cache.
