@@ -4,6 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages JSON sidecar metadata files alongside audio captures.
@@ -24,14 +25,24 @@ object CaptureMetadataStore {
         val label: String
     )
 
+    private val metadataCache = ConcurrentHashMap<String, CaptureMetadata>()
+
     private fun metadataFile(audioFilePath: String): File {
         val audioFile = File(audioFilePath)
         return File(audioFile.parent, audioFile.nameWithoutExtension + ".meta.json")
     }
 
     fun load(audioFilePath: String): CaptureMetadata {
+        metadataCache[audioFilePath]?.let { cached ->
+            return cached.copy(tags = cached.tags.toMutableList(), bookmarks = cached.bookmarks.toList())
+        }
+
         val file = metadataFile(audioFilePath)
-        if (!file.exists()) return CaptureMetadata()
+        if (!file.exists()) {
+            val emptyMeta = CaptureMetadata()
+            metadataCache[audioFilePath] = emptyMeta
+            return emptyMeta.copy(tags = emptyMeta.tags.toMutableList(), bookmarks = emptyMeta.bookmarks.toList())
+        }
 
         return try {
             val json = JSONObject(file.readText())
@@ -46,15 +57,19 @@ object CaptureMetadataStore {
                     bookmarks.add(BookmarkEntry(bm.getLong("offsetMs"), bm.optString("label", "")))
                 }
             }
-            CaptureMetadata(
+            val loadedMeta = CaptureMetadata(
                 tags = tags,
                 isFavorite = json.optBoolean("isFavorite", false),
                 transcript = if (json.has("transcript")) json.getString("transcript") else null,
                 bookmarks = bookmarks,
                 isEnhanced = json.optBoolean("isEnhanced", false)
             )
+            metadataCache[audioFilePath] = loadedMeta
+            loadedMeta.copy(tags = loadedMeta.tags.toMutableList(), bookmarks = loadedMeta.bookmarks.toList())
         } catch (_: Exception) {
-            CaptureMetadata()
+            val emptyMeta = CaptureMetadata()
+            metadataCache[audioFilePath] = emptyMeta
+            emptyMeta.copy(tags = emptyMeta.tags.toMutableList(), bookmarks = emptyMeta.bookmarks.toList())
         }
     }
 
@@ -76,6 +91,7 @@ object CaptureMetadataStore {
                 put("bookmarks", bmArray)
             }
             file.writeText(json.toString(2))
+            metadataCache[audioFilePath] = metadata.copy(tags = metadata.tags.toMutableList(), bookmarks = metadata.bookmarks.toList())
         } catch (_: Exception) { }
     }
 
@@ -117,6 +133,7 @@ object CaptureMetadataStore {
 
     fun delete(audioFilePath: String) {
         metadataFile(audioFilePath).delete()
+        metadataCache.remove(audioFilePath)
     }
 
     /** Get all unique tags used across all captures */

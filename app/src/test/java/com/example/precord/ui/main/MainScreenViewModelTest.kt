@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import junit.framework.TestCase.assertEquals
+import junit.framework.TestCase.assertTrue
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -42,10 +43,7 @@ class MainScreenViewModelTest {
     val state = viewModel.uiState.first()
     assertEquals(false, state.isBuffering)
   }
-import org.junit.Test
-import junit.framework.TestCase.assertTrue
 
-class MainScreenViewModelTest {
   @Test
   fun dummyTest() {
     assertTrue(true)
