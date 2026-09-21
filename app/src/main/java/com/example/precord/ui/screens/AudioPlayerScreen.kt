@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.io.File
 import java.io.FileInputStream
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
@@ -476,58 +477,76 @@ private fun formatTimeMs(ms: Int): String {
 /**
  * Generate waveform amplitudes from an audio file.
  * Returns normalized float values 0..1.
+ * ⚡ Bolt: Memory optimization. Uses RandomAccessFile to read samples directly from disk
+ * instead of loading the entire file into memory (O(N) -> O(1) memory allocation).
  */
 private fun generateWaveform(filePath: String, numBars: Int): FloatArray {
     return try {
         val file = File(filePath)
-        val bytes = file.readBytes()
+        if (!file.exists()) return FloatArray(numBars) { 0.2f }
 
-        // Find PCM data region
-        val pcmOffset = when (file.extension.lowercase()) {
-            "wav" -> findWavDataOffset(bytes)
-            "aiff" -> 72
-            else -> return FloatArray(numBars) { 0.2f } // Compressed formats: show flat waveform
+        var pcmOffset = 44L // default wav header size
+
+        if (file.extension.lowercase() == "wav") {
+            // Read enough header to find data chunk
+            val headerBytes = ByteArray(4096)
+            FileInputStream(file).use { fis ->
+                val read = fis.read(headerBytes)
+                for (i in 0 until read - 4) {
+                    if (headerBytes[i] == 'd'.code.toByte() &&
+                        headerBytes[i + 1] == 'a'.code.toByte() &&
+                        headerBytes[i + 2] == 't'.code.toByte() &&
+                        headerBytes[i + 3] == 'a'.code.toByte()
+                    ) {
+                        pcmOffset = (i + 8).toLong()
+                        break
+                    }
+                }
+            }
+        } else if (file.extension.lowercase() == "aiff") {
+            pcmOffset = 72L
+        } else {
+             return FloatArray(numBars) { 0.2f }
         }
 
-        if (pcmOffset < 0 || pcmOffset >= bytes.size) return FloatArray(numBars) { 0.2f }
-
-        val pcmData = bytes.copyOfRange(pcmOffset, bytes.size)
-        val totalSamples = pcmData.size / 2
-        if (totalSamples < numBars) return FloatArray(numBars) { 0.2f }
+        val fileLength = file.length()
+        val dataLength = fileLength - pcmOffset
+        val totalSamples = dataLength / 2
+        if (totalSamples < numBars || dataLength <= 0) return FloatArray(numBars) { 0.2f }
 
         val samplesPerBar = totalSamples / numBars
         val result = FloatArray(numBars)
 
-        for (i in 0 until numBars) {
-            var maxAmp = 0
-            val startSample = i * samplesPerBar
-            for (j in 0 until samplesPerBar) {
-                val idx = (startSample + j) * 2
-                if (idx + 1 < pcmData.size) {
-                    val low = pcmData[idx].toInt() and 0xFF
-                    val high = pcmData[idx + 1].toInt()
-                    val sample = abs((high shl 8) or low)
-                    maxAmp = max(maxAmp, sample)
+        // Read a max of 64 samples per bar to get an accurate representation without reading everything
+        val maxSamplesToRead = 64L
+        val sampleStride = max(1L, samplesPerBar / maxSamplesToRead)
+        val actualSamplesToRead = min(samplesPerBar, maxSamplesToRead).toInt()
+
+        RandomAccessFile(file, "r").use { raf ->
+            for (i in 0 until numBars) {
+                val barStartSample = i * samplesPerBar
+                // Center the reading window in the middle of the bar's timeframe
+                val centerOffset = (samplesPerBar - (actualSamplesToRead * sampleStride)) / 2
+                var startSample = barStartSample + max(0L, centerOffset)
+
+                var maxAmp = 0
+                for (j in 0 until actualSamplesToRead) {
+                    val byteOffset = pcmOffset + (startSample * 2)
+                    if (byteOffset + 1 < fileLength) {
+                        raf.seek(byteOffset)
+                        val low = raf.read().toByte().toInt() and 0xFF
+                        val high = raf.read().toByte().toInt()
+                        val sample = abs((high shl 8) or low)
+                        maxAmp = max(maxAmp, sample)
+                    }
+                    startSample += sampleStride
                 }
+                result[i] = maxAmp / 32768f
             }
-            result[i] = maxAmp / 32768f
         }
 
         result
     } catch (_: Exception) {
         FloatArray(numBars) { 0.2f }
     }
-}
-
-private fun findWavDataOffset(bytes: ByteArray): Int {
-    for (i in 0 until bytes.size - 4) {
-        if (bytes[i] == 'd'.code.toByte() &&
-            bytes[i + 1] == 'a'.code.toByte() &&
-            bytes[i + 2] == 't'.code.toByte() &&
-            bytes[i + 3] == 'a'.code.toByte()
-        ) {
-            return i + 8
-        }
-    }
-    return 44
 }

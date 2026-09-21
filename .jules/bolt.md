@@ -17,3 +17,7 @@
 ## 2024-05-25 - Avoid allocations inside Compose Canvas draw phase
 **Learning:** In Compose, the `Canvas` drawing scope runs very frequently, potentially at 60-120 frames per second. Allocating memory inside this block (e.g., using `sliceArray` or implicit object creation like `IntProgression` via `.reversed()`) triggers rapid garbage collection, which leads to UI jank or dropped frames.
 **Action:** When rendering data structures continuously (like waveforms), extract only primitive values using direct array indexing and manual iteration (e.g., `downTo`) to achieve zero-allocation draw loops.
+
+## 2024-05-25 - Avoid O(N) allocations for audio file reading in UI
+**Learning:** Reading entire audio files into memory using `file.readBytes()` for UI visualization (like waveforms) causes massive O(N) memory allocations (up to 4 hours of audio = massive MBs). This leads to out-of-memory errors and UI freezing.
+**Action:** Always use `RandomAccessFile` to read small, representative chunks (or samples) directly from disk for UI tasks instead of loading the entire file into memory. This ensures O(1) memory complexity and much faster processing time (O(numBars)).
