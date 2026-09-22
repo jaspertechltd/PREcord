@@ -17,3 +17,12 @@
 ## 2024-05-25 - Avoid allocations inside Compose Canvas draw phase
 **Learning:** In Compose, the `Canvas` drawing scope runs very frequently, potentially at 60-120 frames per second. Allocating memory inside this block (e.g., using `sliceArray` or implicit object creation like `IntProgression` via `.reversed()`) triggers rapid garbage collection, which leads to UI jank or dropped frames.
 **Action:** When rendering data structures continuously (like waveforms), extract only primitive values using direct array indexing and manual iteration (e.g., `downTo`) to achieve zero-allocation draw loops.
+## $(date +%Y-%m-%d) - Jetpack Compose N+1 I/O Blocking
+
+**Learning:** Reading JSON metadata synchronously from disk using `CaptureMetadataStore.load` inside Jetpack Compose `LazyColumn` iterations causes severe N+1 performance jank due to repeated file I/O on the main thread for each item in a long list.
+**Action:** Implemented an in-memory `ConcurrentHashMap` cache in `CaptureMetadataStore`. Ensured the cache also handles negative/empty states (like file not found) to prevent repeated failed reads, and implemented deep copying of data structures (`toMutableList()`, `toList()`) to prevent implicit cache mutations and subsequent missed Compose recompositions.
+
+## $(date +%Y-%m-%d) - LruCache for File Data
+
+**Learning:** When using in-memory caches to prevent file I/O blocking (e.g. metadata for Jetpack Compose lists), it is critical to use an eviction-based cache like `android.util.LruCache` rather than an unbounded `ConcurrentHashMap`. Unbounded caches for file data can easily lead to memory bloat and OutOfMemory errors in Android applications with large numbers of media files.
+**Action:** Replaced `ConcurrentHashMap` with `LruCache` in `CaptureMetadataStore`.
