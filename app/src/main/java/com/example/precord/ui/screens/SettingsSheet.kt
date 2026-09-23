@@ -2,6 +2,8 @@ package com.example.precord.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -261,10 +263,14 @@ fun SettingsSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                fileFormat = fmt.name
-                                prefs.fileFormat = fmt.name
-                            }
+                            .selectable(
+                                selected = isSelected,
+                                onClick = {
+                                    fileFormat = fmt.name
+                                    prefs.fileFormat = fmt.name
+                                },
+                                role = Role.RadioButton
+                            )
                             .then(
                                 if (isSelected)
                                     Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
@@ -276,10 +282,7 @@ fun SettingsSheet(
                         // Radio button
                         RadioButton(
                             selected = isSelected,
-                            onClick = {
-                                fileFormat = fmt.name
-                                prefs.fileFormat = fmt.name
-                            },
+                            onClick = null,
                             modifier = Modifier.size(20.dp)
                         )
 
@@ -364,19 +367,20 @@ fun SettingsSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            sampleRate = rate
-                            prefs.sampleRate = rate
-                        }
+                        .selectable(
+                            selected = sampleRate == rate,
+                            onClick = {
+                                sampleRate = rate
+                                prefs.sampleRate = rate
+                            },
+                            role = Role.RadioButton
+                        )
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     RadioButton(
                         selected = sampleRate == rate,
-                        onClick = {
-                            sampleRate = rate
-                            prefs.sampleRate = rate
-                        }
+                        onClick = null
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(label)
@@ -771,7 +775,11 @@ private fun SettingsToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Switch) { onCheckedChange(!checked) }
+            .toggleable(
+                value = checked,
+                onValueChange = onCheckedChange,
+                role = Role.Switch
+            )
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
