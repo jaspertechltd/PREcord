@@ -113,29 +113,33 @@ object AudioEncoder {
         return try {
             val codecName = findEncoder("audio/flac")
             if (codecName == null) {
-                // Fallback to WAV using outputFile directly
                 return encodeToWav(pcmData, sampleRate, channels, bitsPerSample, outputFile)
             }
 
             val codec = MediaCodec.createByCodecName(codecName)
             val format = MediaFormat.createAudioFormat("audio/flac", sampleRate, channels)
             format.setInteger(MediaFormat.KEY_FLAC_COMPRESSION_LEVEL, 5)
-            format.setInteger(MediaFormat.KEY_BIT_RATE, sampleRate * channels * bitsPerSample)
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
+            // Note: Do NOT set KEY_BIT_RATE for FLAC - it's lossless
 
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             codec.start()
 
             FileOutputStream(outputFile).use { fos ->
-                encodeWithCodec(codec, pcmData, fos)
+                encodeWithCodecRobust(codec, pcmData, fos)
             }
 
             codec.stop()
             codec.release()
+
+            // Verify output is valid
+            if (!outputFile.exists() || outputFile.length() == 0L) {
+                return encodeToWav(pcmData, sampleRate, channels, bitsPerSample, outputFile)
+            }
+
             true
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback to WAV using outputFile directly
             encodeToWav(pcmData, sampleRate, channels, bitsPerSample, outputFile)
         }
     }
@@ -164,7 +168,7 @@ object AudioEncoder {
             codec.start()
 
             FileOutputStream(outputFile).use { fos ->
-                encodeWithCodec(codec, pcmData, fos)
+                encodeWithCodecRobust(codec, pcmData, fos)
             }
 
             codec.stop()
@@ -221,6 +225,68 @@ object AudioEncoder {
                 outputStream.write(ch)
                 codec.releaseOutputBuffer(retryIndex, false)
                 if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
+            }
+        }
+    }
+
+    private fun encodeWithCodecRobust(codec: MediaCodec, pcmData: ByteArray, outputStream: FileOutputStream) {
+        val bufferInfo = MediaCodec.BufferInfo()
+        var inputOffset = 0
+        var inputDone = false
+        var outputDone = false
+        var retryCount = 0
+        val maxRetries = 200  // Allow plenty of retries for codec to flush
+
+        while (!outputDone) {
+            // Feed input buffers
+            if (!inputDone) {
+                val inputIndex = codec.dequeueInputBuffer(10000)
+                if (inputIndex >= 0) {
+                    val inputBuffer = codec.getInputBuffer(inputIndex) ?: continue
+                    val chunkSize = minOf(inputBuffer.remaining(), pcmData.size - inputOffset)
+                    if (chunkSize > 0) {
+                        inputBuffer.put(pcmData, inputOffset, chunkSize)
+                        inputOffset += chunkSize
+                        val flags = if (inputOffset >= pcmData.size) MediaCodec.BUFFER_FLAG_END_OF_STREAM else 0
+                        codec.queueInputBuffer(inputIndex, 0, chunkSize, 0, flags)
+                        if (inputOffset >= pcmData.size) inputDone = true
+                    } else {
+                        codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        inputDone = true
+                    }
+                }
+            }
+
+            // Drain output buffers
+            val outputIndex = codec.dequeueOutputBuffer(bufferInfo, 10000)
+            when {
+                outputIndex >= 0 -> {
+                    retryCount = 0
+                    val outputBuffer = codec.getOutputBuffer(outputIndex)
+                    if (outputBuffer != null && bufferInfo.size > 0) {
+                        val chunk = ByteArray(bufferInfo.size)
+                        outputBuffer.position(bufferInfo.offset)
+                        outputBuffer.get(chunk)
+                        outputStream.write(chunk)
+                    }
+                    codec.releaseOutputBuffer(outputIndex, false)
+                    if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        outputDone = true
+                    }
+                }
+                outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    // Expected before first output buffer - just continue
+                    retryCount = 0
+                }
+                outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                    if (inputDone) {
+                        retryCount++
+                        if (retryCount > maxRetries) {
+                            outputDone = true  // Give up after many retries
+                        }
+                    }
+                    // If input not done, just loop to feed more input
+                }
             }
         }
     }

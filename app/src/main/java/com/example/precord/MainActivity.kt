@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
         keySequence.add(keyName)
         lastKeyTime = now
 
-        val targetCombo = prefs?.buttonComboSequence?.split(",")?.map { it.trim() } ?: return true
+        val targetCombo = prefs?.buttonComboSequence?.split(",")?.map { it.trim() } ?: return super.onKeyDown(keyCode, event)
 
         if (keySequence.size >= targetCombo.size) {
             val recentKeys = keySequence.takeLast(targetCombo.size)
@@ -116,7 +116,7 @@ class MainActivity : ComponentActivity() {
             keySequence.removeAt(0)
         }
 
-        return true
+        return super.onKeyDown(keyCode, event)
     }
 
     private fun triggerComboCapture() {

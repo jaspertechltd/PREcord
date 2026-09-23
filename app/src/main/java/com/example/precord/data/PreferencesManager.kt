@@ -7,7 +7,7 @@ class PreferencesManager(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("precord_prefs", Context.MODE_PRIVATE)
 
     var bufferDurationSeconds: Int
-        get() = prefs.getInt("buffer_duration_seconds", 60)
+        get() = prefs.getInt("buffer_duration_seconds", 10)
         set(value) = prefs.edit().putInt("buffer_duration_seconds", value.coerceIn(10, 14400)).apply()
 
     var sampleRate: Int
@@ -26,6 +26,10 @@ class PreferencesManager(context: Context) {
         get() = prefs.getString("file_format", "WAV") ?: "WAV"
         set(value) = prefs.edit().putString("file_format", value).apply()
 
+    var saveFolderPath: String
+        get() = prefs.getString("save_folder_path", "Music/Precord") ?: "Music/Precord"
+        set(value) = prefs.edit().putString("save_folder_path", value).apply()
+
     var isStereo: Boolean
         get() = prefs.getBoolean("is_stereo", false)
         set(value) {
@@ -42,7 +46,7 @@ class PreferencesManager(context: Context) {
         set(value) = prefs.edit().putString("button_combo", value).apply()
 
     var buttonComboEnabled: Boolean
-        get() = prefs.getBoolean("button_combo_enabled", true)
+        get() = prefs.getBoolean("button_combo_enabled", false)
         set(value) = prefs.edit().putBoolean("button_combo_enabled", value).apply()
 
     var hasCompletedOnboarding: Boolean

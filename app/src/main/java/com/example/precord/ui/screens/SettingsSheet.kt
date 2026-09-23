@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -57,6 +58,8 @@ fun SettingsSheet(
     var autoTranscribe by remember { mutableStateOf(prefs.autoTranscribe) }
     var cloudUploadEnabled by remember { mutableStateOf(prefs.cloudUploadEnabled) }
     var cloudUploadUri by remember { mutableStateOf(prefs.cloudUploadUri) }
+    var saveFolderPath by remember { mutableStateOf(prefs.saveFolderPath) }
+    var showProUpgrade by remember { mutableStateOf(false) }
 
     val channels = if (isStereo) 2 else 1
 
@@ -152,10 +155,19 @@ fun SettingsSheet(
                 Slider(
                     value = sliderPosition,
                     onValueChange = {
-                        sliderPosition = it
-                        bufferDuration = sliderToDuration(it)
-                        bufferDurationText = formatDurationForInput(bufferDuration)
-                        prefs.bufferDurationSeconds = bufferDuration
+                        val newDur = sliderToDuration(it)
+                        if (newDur > 10 && !isPro) {
+                            sliderPosition = durationToSlider(10)
+                            bufferDuration = 10
+                            bufferDurationText = formatDurationForInput(10)
+                            prefs.bufferDurationSeconds = 10
+                            showProUpgrade = true
+                        } else {
+                            sliderPosition = it
+                            bufferDuration = newDur
+                            bufferDurationText = formatDurationForInput(newDur)
+                            prefs.bufferDurationSeconds = newDur
+                        }
                     },
                     modifier = Modifier.weight(1f),
                     colors = SliderDefaults.colors(
@@ -303,6 +315,36 @@ fun SettingsSheet(
                             )
                         }
                     }
+                }
+            }
+
+            SettingsDivider()
+
+            // ═══════════════════════════════════════
+            // SAVE LOCATION
+            // ═══════════════════════════════════════
+            SectionLabel("Save Location")
+
+            Text(
+                text = saveFolderPath,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("Music/Precord", "Downloads/Precord", "Documents/Precord").forEach { path ->
+                    FilterChip(
+                        selected = saveFolderPath == path,
+                        onClick = {
+                            saveFolderPath = path
+                            prefs.saveFolderPath = path
+                        },
+                        label = { Text(path.split("/")[0], style = MaterialTheme.typography.labelSmall) }
+                    )
                 }
             }
 
@@ -646,19 +688,39 @@ fun SettingsSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            SettingsDivider()
 
-            Text("Save Location", style = MaterialTheme.typography.labelLarge)
-            Text(
-                "Music/Precord/",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // ═══════════════════════════════════════
+            // DEVELOPER WEBSITE
+            // ═══════════════════════════════════════
+            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { uriHandler.openUri("http://precord.ca") }
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Developer Website", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "precord.ca",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = "Open website",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                "Precord v1.1",
+                "Precord v1.02",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -667,6 +729,17 @@ fun SettingsSheet(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showProUpgrade) {
+        com.example.precord.ui.components.ProUpgradeSheet(
+            onDismiss = { showProUpgrade = false },
+            onPurchased = {
+                prefs.isPro = true
+                isPro = true
+                showProUpgrade = false
+            }
+        )
     }
 }
 

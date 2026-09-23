@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.precord.audio.AudioEnhancer
 import com.example.precord.data.CaptureMetadataStore
+import com.example.precord.ui.components.ProUpgradeSheet
 import com.example.precord.data.PreferencesManager
 import com.example.precord.service.CapturedFile
 import com.example.precord.service.TranscriptionManager
@@ -55,6 +56,7 @@ fun CapturesScreen(
     
     var currentlyPlaying by remember { mutableStateOf<String?>(null) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var showProUpgrade by remember { mutableStateOf(false) }
     
     // Refresh captures
     fun refreshList() {
@@ -175,7 +177,16 @@ fun CapturesScreen(
                     
                     val isPlaying = currentlyPlaying == capture.filePath
                     
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                mediaPlayer?.release()
+                                mediaPlayer = null
+                                currentlyPlaying = null
+                                onOpenPlayer(capture.filePath)
+                            }
+                    ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 // Favorite toggle
@@ -266,7 +277,7 @@ fun CapturesScreen(
                                     IconButton(
                                         onClick = {
                                             if (!prefs.isPro) {
-                                                Toast.makeText(context, "Enhancement is a Pro feature", Toast.LENGTH_SHORT).show()
+                                                showProUpgrade = true
                                             } else if (!isEnhanced) {
                                                 isEnhancing = true
                                                 coroutineScope.launch {
@@ -299,7 +310,7 @@ fun CapturesScreen(
                                 // Transcribe
                                 IconButton(onClick = {
                                     if (!prefs.isPro) {
-                                        Toast.makeText(context, "Transcription is a Pro feature", Toast.LENGTH_SHORT).show()
+                                        showProUpgrade = true
                                     } else {
                                         showTranscriptDialog = true
                                     }
@@ -475,12 +486,35 @@ fun CapturesScreen(
                 }
             }
             }
+            
+            if (showProUpgrade) {
+                ProUpgradeSheet(
+                    onDismiss = { showProUpgrade = false },
+                    onPurchased = {
+                        prefs.isPro = true
+                        showProUpgrade = false
+                        Toast.makeText(context, "✓ Pro Mode unlocked!", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
         }
     }
 }
 
 fun getCaptures(context: Context): List<CapturedFile> {
-    val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Precord")
+    val prefs = PreferencesManager(context)
+    val savePath = prefs.saveFolderPath
+    val dir = if (savePath.contains("/")) {
+        val parts = savePath.split("/", limit = 2)
+        val baseDir = when (parts[0]) {
+            "Downloads" -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            "Documents" -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+            else -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+        }
+        if (parts.size > 1) File(baseDir, parts[1]) else baseDir
+    } else {
+        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), savePath)
+    }
     if (!dir.exists()) return emptyList()
     
     val extensions = listOf("wav", "mp4", "mp3", "aiff", "ogg", "flac")

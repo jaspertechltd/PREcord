@@ -1,0 +1,94 @@
+
+
+# 🎙️ Precord: Meticulous Technical Breakdown & Specifications
+
+### Overview
+Precord is a retroactive, background-buffering audio capture application for Android designed to function like a "DVR for your ears," allowing users to save spontaneous audio events *after* they happen. Instead of predicting when to hit record, the app continuously runs a lightweight, memory-efficient foreground service that records microphone input into a circular byte buffer. When the user triggers a "Capture"—either via the main UI button, a persistent notification, a quick-settings tile, a shake gesture, or a hardware volume button sequence—the app instantly dumps the contents of the ring buffer (spanning from 10 seconds up to 4 hours) into an encoded audio file. It is built natively with modern Android components, targeting Android SDK 36, and provides professional audio engineering features including format switching, dynamic file size estimation, real-time waveform visualization, and automated post-processing like equalization and sound detection.
+
+---
+
+### 🛠️ Architecture & Tech Stack (Coding Tools Chosen)
+
+*   **Language & Runtime:** The app is written entirely in Kotlin 2.0+ targeting Java 17 compatibility.
+*   **UI Framework:** The entire presentation layer is built using Jetpack Compose and Material Design 3, heavily emphasizing a "Dark Theme First" aesthetic.
+*   **Navigation:** Uses the modern `androidx.navigation3` library for backstack management, avoiding older fragment-based navigation.
+*   **Architecture Pattern:** Follows a Clean Architecture pattern utilizing MVVM (Model-View-ViewModel). 
+*   **State Management:** ViewModels expose UI state using Kotlin Coroutines and `StateFlow` (`MutableStateFlow.asStateFlow()`), which Compose observes via `collectAsStateWithLifecycle()`.
+*   **Asynchronous Processing:** Heavy lifting like audio encoding, file I/O, and cloud uploading is dispatched to CoroutineScopes utilizing `Dispatchers.IO` and `SupervisorJob()` to prevent cascading cancellations on errors.
+*   **Background Services:** Relies on an Android `Service` running as a Foreground Service (with `ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE`) to guarantee uninterrupted background audio buffering even when the screen is off.
+*   **Audio Core APIs:** Built directly on top of Android's low-level `AudioRecord` API (for capturing raw PCM data) rather than higher-level abstraction libraries.
+*   **Hardware Interception:** Employs Android's `MediaSession` and `VolumeProvider` APIs with `VOLUME_CONTROL_RELATIVE` to intercept hardware volume button presses globally.
+
+### ⚙️ Core Audio Engine & Buffering Mechanics
+
+*   **The Ring Buffer:** The heart of the app is a custom `RingBuffer.kt` class that manages a pre-allocated fixed-size `ByteArray` corresponding to the user's chosen duration, sample rate, and channel count. 
+*   **Continuous Overwriting:** As new PCM bytes stream in from `AudioRecord`, the `RingBuffer` seamlessly wraps its write pointer back to index 0 when full, constantly overwriting the oldest audio data without memory reallocation overhead.
+*   **Snapshot Extraction:** When a capture is triggered, the engine performs an instantaneous synchronized snapshot of the `RingBuffer`, copying the ordered continuous byte array from the oldest un-overwritten byte to the newest.
+*   **Audio Source Routing:** The engine utilizes `MediaRecorder.AudioSource.MIC`, but includes explicit logic to interface with the `AudioManager` to invoke `startBluetoothSco()` and set `isBluetoothScoOn = true`, allowing the buffer to route from external lapel mics or Bluetooth earbuds dynamically.
+*   **Format Encoding:** The raw PCM snapshot is passed to a custom `AudioEncoder` which can generate headers and compress the data into five formats: WAV (44-byte header), AIFF (72-byte header), FLAC (via 55% average compression algorithms), MP3 (at ~192kbps), and OGG (Vorbis at ~160kbps).
+*   **Sample Rate & Channels:** The recording thread dynamically configures itself to initialize `AudioRecord` with `AudioFormat.CHANNEL_IN_STEREO` or `CHANNEL_IN_MONO` and sample rates of 22050Hz, 44100Hz, or 48000Hz based on `PreferencesManager`.
+
+### 📱 UI Layout & Visuals
+
+#### The Main Screen (`MainScreen.kt`)
+*   **Top App Header:** Displays the title "Precord" in `displayLarge` typography and the subtitle "Retrospective Recorder" in `bodyMedium` centered at the top of the screen.
+*   **Buffer Indicator Component:** A custom dynamic `BufferIndicator` sits below the header, showing the real-time elapsed seconds versus the maximum configured buffer seconds (e.g., "Buffering: 00:30 / 15:00").
+*   **Center Waveform:** The middle of the screen is dominated by an `AnimatedWaveformVisualizer` that takes up `weight(1f)`. It receives a continuous `FloatArray` of amplitudes from the `AudioCaptureService` and renders a smooth 60 FPS visual representation of the incoming mic audio.
+*   **Permissions Rationale:** If microphone permission is absent, the bottom half replaces the capture button with a text explanation and a "Grant Permissions" button that triggers an `ActivityResultContracts.RequestMultiplePermissions` launcher.
+*   **Primary Capture Button:** A massive, primary-colored `CaptureButton` sits at the lower third of the screen, acting as the main manual trigger to dump the buffer to storage.
+*   **Action Bar:** Below the capture button is a horizontally centered `Row` containing four icon buttons: an External Mic quick-toggle (`Headset`/`HeadsetOff`), a "Buy Pro" button with a Star icon (or a "Pro Mode" label if unlocked), a Settings gear icon, and a Captures folder icon to open the library.
+
+#### The Settings Sheet (`SettingsSheet.kt`)
+*   **BottomSheet Container:** Settings are presented in a `ModalBottomSheet` utilizing a vertical scroll state, allowing the user to configure the app without losing context of the main screen.
+*   **Logarithmic Buffer Slider:** Features a custom slider mapped logarithmically (using `ln()` and `exp()`) allowing granular control from 10 seconds up to 14,400 seconds (4 hours), accompanied by a manual text input box.
+*   **Quick Duration Presets:** A row of `FilterChip` components allows instantly snapping the buffer to 30s, 1m, 5m, 15m, or 1h.
+*   **Dynamic File Size Estimator:** The File Format section lists radio buttons for WAV, AIFF, FLAC, MP3, and OGG, but dynamically calculates and displays the expected final file size (e.g., "25.4 MB" and "176 KB/s") based on the current buffer duration slider position and selected sample rate.
+*   **Audio Quality & Hardware Toggles:** Standard `RadioButton` lists for sample rates (22kHz, 44.1kHz, 48kHz) and `Switch` components (using `Role.Switch` semantics) for Stereo Recording, External Mic, and Auto-start.
+*   **Volume Combo Configurator:** Displays visual chips resembling hardware buttons (e.g., "Vol ▼", "Vol ▲") to show the current secret capture sequence, along with preset chips for quick assignment (like "▼▲▼").
+*   **Pro Features Section:** Clearly divided by a "PRO FEATURES" header. It contains sliders for Shake Sensitivity (1.5f to 5f) and Silence Threshold (-60dB to -20dB), along with switches for Auto-Enhance, Auto-Transcribe, and an `OutlinedButton` to launch the Android system file picker for Cloud Backup selection.
+
+#### Captures Library & Player (`CapturesScreen.kt` & `AudioPlayerScreen.kt`)
+*   **Library List:** A vertical list of `CaptureListItem` components displaying the file name, timestamp, duration, and dynamically calculated file size of all saved exports.
+*   **A-B Loop Player:** The audio playback screen features interactive start and end markers on a static waveform, allowing users to loop specific musical passages or vocal segments repeatedly.
+*   **Tagging System:** Users can tap chips to apply preset tags (`Melody`, `Voice`, `Sound FX`, `Meeting`, `Idea`, `Practice`) and mark files as favorites.
+
+### 🌊 Feature Flow Progressions
+
+#### Standard Background Capture Flow
+1.  **Initialization:** Upon opening, `MainScreenViewModel` checks for `RECORD_AUDIO` and `POST_NOTIFICATIONS` permissions. If granted, `AudioCaptureService` is started via `startForegroundService()`.
+2.  **Foreground Pinning:** The service posts a persistent, low-priority ongoing notification showing "Buffering audio" with a quick-action "Capture" button, keeping the app alive in the OS background.
+3.  **Continuous Buffering:** The `AudioRecord` loop runs on an urgent-priority background thread, pushing bytes into the `RingBuffer`.
+4.  **Capture Trigger:** The user taps the giant Capture button on the main screen.
+5.  **Extraction & Encoding:** The service snapshots the `RingBuffer`, formats a filename based on the current timestamp, and passes the byte array to `AudioEncoder.encodeToFormat()`.
+6.  **Completion & Indexing:** A Toast notification confirms the save (e.g., "14:05:22 capture saved!"). `MediaScannerConnection` is invoked to instantly index the new file in the Android MediaStore so it appears in other audio apps.
+
+#### Stealth Hardware Capture Flow (Screen Off)
+1.  **Media Session Registration:** If enabled in preferences, the service registers a dummy `MediaSession` that mimics active music playback.
+2.  **Volume Interception:** A custom `VolumeProvider` intercepts physical volume key presses.
+3.  **Sequence Matching:** Pressing volume keys logs "UP" or "DOWN" to a temporary array, with a 2-second timeout clearing the array if the user pauses.
+4.  **Execution:** If the trailing items in the array match the user's predefined combo string (e.g., "DOWN,UP,DOWN"), the array clears and `captureBuffer()` is silently called.
+5.  **Haptic/Visual Feedback:** A brief Toast appears (if the screen happens to be on) confirming the stealth capture succeeded.
+
+#### Shake-to-Capture Flow (Pro)
+1.  **Sensor Registration:** `ShakeDetector` registers a listener with the device's `SensorManager` for the `TYPE_ACCELEROMETER`.
+2.  **Threshold Calculation:** It calculates the G-force of device movements, comparing it against the user's sensitivity preference float.
+3.  **Trigger:** Upon detecting a sharp shake exceeding the threshold, it invokes the capture callback on the main thread, executing a buffer save.
+
+#### Post-Capture Processing Flow (Pro)
+1.  **Enhancement Check:** Immediately after encoding finishes, if the format is uncompressed (WAV/AIFF) and "Auto-Enhance" is true, a coroutine launches `AudioEnhancer.enhanceFile()`.
+2.  **DSP Application:** The enhancer applies peak volume normalization to bring quiet audio to 0dBfs, and applies an active high-pass filter to strip low-frequency room rumble.
+3.  **Sound Detection:** If "Auto-Bookmark" is on, `SoundDetector.detectTransitions()` scans the raw PCM array for volume spikes above the configured dB threshold, generating timestamp metadata bookmarks for when speech or music started.
+4.  **Cloud Sync:** If a SAF (Storage Access Framework) URI is configured, `CloudUploadManager.uploadFile()` clones the final audio file into the user's selected remote synced folder (e.g., Google Drive).
+
+### 📁 File Management & Storage
+
+*   **Primary Directory:** Audio files are saved directly to the device's public `Music` directory under a specific `Precord` subfolder, with a setting to manually choose the output folder. (`Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC) + "/Precord"`).
+*   **File Naming Convention:** Files are strictly named `Precord_{timestamp_in_ms}.{extension}` (e.g., `Precord_1726084050000.wav`).
+*   **Internal State Tracking:** Newly saved files are encapsulated in a `CapturedFile` data class holding the path, name, timestamp, durationMs, and byte size, which is appended to a `MutableStateFlow` list so the UI updates instantly.
+*   **Metadata Storage:** Bookmarks, tags, and "enhanced" status flags are managed outside the audio file headers by `CaptureMetadataStore`, tying metadata to the absolute file path.
+
+### 💎 Pro vs Free Tier Modifiers
+
+*   **Free Constraints:** The `PreferencesManager` acts as the gatekeeper. Free users are hard-capped at a 10-second (600 seconds) maximum on the buffer slider. They are restricted exclusively to the `WAV` uncompressed audio format.
+*   **Pro Unlocks:** Toggling the `isPro` boolean (via the debug "Buy Pro" button) instantly expands the slider constraint up to 4 hours (14,400 seconds). It unlocks the `RadioButton` selections for AIFF, FLAC, MP3, and OGG formats.
+*   **Pro Exclusives:** `ShakeDetector`, `SoundDetector`, `AudioEnhancer`, `TranscriptionManager`, and `CloudUploadManager` initialization blocks all contain explicit `if (prefs.isPro)` gates; these modules remain entirely dormant and consume zero CPU overhead on the free tier.

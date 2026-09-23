@@ -346,6 +346,21 @@ class AudioCaptureService : Service() {
         startRecording()
     }
 
+    fun updateConfig() {
+        val newConfig = AudioConfig(
+            sampleRate = prefs.sampleRate,
+            channels = prefs.channels,
+            bufferDurationSeconds = prefs.bufferDurationSeconds
+        )
+        if (newConfig.totalBufferBytes != config.totalBufferBytes) {
+            config = newConfig
+            ringBuffer = RingBuffer(config.totalBufferBytes)
+            if (isRecording.get()) {
+                restartRecording()
+            }
+        }
+    }
+
     fun setExternalMic(use: Boolean) {
         prefs.useExternalMic = use
         _useExternalMic.value = use
@@ -398,7 +413,20 @@ class AudioCaptureService : Service() {
         format: AudioEncoder.Format
     ): String? {
         return try {
-            val musicDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Precord")
+            val savePath = prefs.saveFolderPath
+            val musicDir = if (savePath.contains("/")) {
+                // Relative path like "Music/Precord"
+                val parts = savePath.split("/", limit = 2)
+                val baseDir = when (parts[0]) {
+                    "Downloads" -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    "Documents" -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+                    else -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+                }
+                if (parts.size > 1) File(baseDir, parts[1]) else baseDir
+            } else {
+                File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), savePath)
+            }
+            
             if (!musicDir.exists()) {
                 musicDir.mkdirs()
             }
@@ -443,10 +471,13 @@ class AudioCaptureService : Service() {
 
                 _capturedFiles.value = _capturedFiles.value + capturedFile
 
-                // Show toast "HH:MM:SS capture saved!"
-                val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(timestamp))
+                // Show toast with duration
+                val totalSec = durationMs / 1000
+                val durMin = totalSec / 60
+                val durSec = totalSec % 60
+                val durationStr = if (durMin > 0) String.format("%d:%02d", durMin, durSec) else "${durSec}s"
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    Toast.makeText(applicationContext, "$timeStr capture saved!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, "$durationStr capture saved!", Toast.LENGTH_SHORT).show()
                 }
 
                 // Pro features: auto-enhance, sound detection bookmarks, cloud upload

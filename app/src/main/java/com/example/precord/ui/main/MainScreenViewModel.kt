@@ -39,6 +39,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var isBound = false
     private var startTimeMs = 0L
 
+    private val _captureAnimationTrigger = MutableStateFlow(0)
+    val captureAnimationTrigger: StateFlow<Int> = _captureAnimationTrigger.asStateFlow()
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             audioService = service as AudioCaptureService.LocalBinder
@@ -122,6 +125,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun capture() {
         audioService?.captureBuffer()
+        _captureAnimationTrigger.value++
     }
 
     fun toggleExternalMic() {

@@ -261,12 +261,12 @@ fun Page3ProMode() {
             modifier = Modifier.padding(bottom = 16.dp)
         )
         Text(
-            text = "Get up to one full hour of retrospective recording.",
+            text = "Supercharge your retrospective recording experience.",
             style = MaterialTheme.typography.bodyLarge
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Free users: up to 5 minutes\nPro users: up to 1 hour",
+            text = "Free: up to 10 seconds\nPro: up to 4 hours of retrospective recording",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -324,13 +324,16 @@ fun Page4VolumeButtonCombo(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Hardware Capture Shortcut",
+            text = "Quick Capture Shortcuts",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 16.dp)
         )
         Text(
-            text = "Capture audio without even looking at your screen! Precord can detect a sequence of volume button presses to trigger a capture.\n\nDefault combo: Volume Down → Volume Up → Volume Down",
+            text = "Capture audio without even looking at your screen!\n\n" +
+                "📱 Volume Button Combo — Press a sequence of volume buttons to trigger a capture. " +
+                "Enable this in Settings and customize your combo.\n\n" +
+                "🤳 Shake-to-Capture (Pro) — Simply shake your phone to save the audio buffer instantly.",
             style = MaterialTheme.typography.bodyLarge
         )
         
@@ -342,7 +345,7 @@ fun Page4VolumeButtonCombo(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = "Note: This feature works by registering as a media session. If you're playing music in Spotify or another app, the volume buttons will control that app's volume instead. The combo works best when no other media is playing.",
+                text = "These shortcuts work even when your screen is off (with background buffering enabled). Volume buttons still control your media volume normally — the combo is detected from a specific sequence.",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(16.dp)
             )
