@@ -1,34 +1,3 @@
-═══════════════════════════════════════
-Precord v1.02 — September 2026
-═══════════════════════════════════════
-
-NEW FEATURES:
-• Pro Upgrade Sheet — Slide-up popup replaces toast notifications for pro features
-• Scrolling Waveform — 10-second treadmill display scrolling right-to-left
-• Capture Animation — Waveform shrinks toward folder icon on capture
-• Kill Process Button — Force-stop button in top-left corner
-• Save Location Setting — Choose Music, Downloads, or Documents folder
-• Developer Website link in settings (precord.ca)
-
-BUG FIXES:
-• FLAC encoding fixed — No longer creates 0-length files (robust MediaCodec drain loop)
-• Duration slider now properly updates the active recording service
-• Volume buttons work normally again (combo detection no longer blocks volume changes)
-• Default buffer duration changed from 60s to 10s
-• Duration > 10s now requires Pro mode
-• Capture toast now shows recording duration instead of timestamp
-
-UI POLISH:
-• New app icon: purple record circle with yellow rewind arrow
-• Onboarding final page updated with volume combo & shake-to-capture info
-• Volume button combo disabled by default (toggleable in Settings)
-• Card tap opens fullscreen waveform player in Captures screen
-
-═══════════════════════════════════════
-
-* Fix duplicate file creation & 0:00 duration display, and generate v1.0 release APK (ee09d79)
-Fix compilation error in MainScreenViewModelTest.kt
-31bde42 Update Appetize GitHub Action version
-69dd340 Fix Appetize GitHub Action reference
-143275e Automated nightly test report and build artifacts
-e27d0c4 Upgrade GitHub Actions to v5 to resolve Node 20 and setup-java v4 deprecation warnings
+* Update TESTY journal (569650d)
+* Add nightly test report for 2026-09-23 (7a584e7)
+* Add Precord v1.02 release APK (f7f15ec)
