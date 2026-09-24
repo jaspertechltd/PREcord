@@ -10,6 +10,7 @@ import org.junit.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 import org.mockito.kotlin.any
+import junit.framework.TestCase.assertTrue
 
 class MainScreenViewModelTest {
   @Test
@@ -42,10 +43,7 @@ class MainScreenViewModelTest {
     val state = viewModel.uiState.first()
     assertEquals(false, state.isBuffering)
   }
-import org.junit.Test
-import junit.framework.TestCase.assertTrue
 
-class MainScreenViewModelTest {
   @Test
   fun dummyTest() {
     assertTrue(true)
