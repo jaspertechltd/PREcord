@@ -7,6 +7,8 @@ import android.os.Environment
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -385,15 +387,19 @@ fun CapturesScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clickable {
-                                                    if (tags.contains(tag)) {
-                                                        CaptureMetadataStore.removeTag(capture.filePath, tag)
-                                                        tags = tags - tag
-                                                    } else {
-                                                        CaptureMetadataStore.addTag(capture.filePath, tag)
-                                                        tags = tags + tag
+                                                .toggleable(
+                                                    value = tags.contains(tag),
+                                                    role = Role.Checkbox,
+                                                    onValueChange = {
+                                                        if (tags.contains(tag)) {
+                                                            CaptureMetadataStore.removeTag(capture.filePath, tag)
+                                                            tags = tags - tag
+                                                        } else {
+                                                            CaptureMetadataStore.addTag(capture.filePath, tag)
+                                                            tags = tags + tag
+                                                        }
                                                     }
-                                                }
+                                                )
                                                 .padding(vertical = 8.dp)
                                         ) {
                                             Checkbox(

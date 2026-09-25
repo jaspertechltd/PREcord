@@ -2,6 +2,8 @@ package com.example.precord.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -261,10 +263,14 @@ fun SettingsSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                fileFormat = fmt.name
-                                prefs.fileFormat = fmt.name
-                            }
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.RadioButton,
+                                onClick = {
+                                    fileFormat = fmt.name
+                                    prefs.fileFormat = fmt.name
+                                }
+                            )
                             .then(
                                 if (isSelected)
                                     Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
@@ -364,10 +370,14 @@ fun SettingsSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            sampleRate = rate
-                            prefs.sampleRate = rate
-                        }
+                        .selectable(
+                            selected = sampleRate == rate,
+                            role = Role.RadioButton,
+                            onClick = {
+                                sampleRate = rate
+                                prefs.sampleRate = rate
+                            }
+                        )
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -771,7 +781,7 @@ private fun SettingsToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Switch) { onCheckedChange(!checked) }
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
