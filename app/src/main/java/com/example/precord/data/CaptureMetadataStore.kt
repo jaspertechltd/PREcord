@@ -4,10 +4,19 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages JSON sidecar metadata files alongside audio captures.
  * Each capture gets a .json file with tags, transcript, bookmarks, favorite status.
+ *
+ * PERFORMANCE OPTIMIZATION:
+ * Implemented in-memory caching using ConcurrentHashMap to solve a severe N+1 I/O
+ * bottleneck when reading metadata synchronously from disk during Jetpack Compose
+ * LazyColumn rendering. Caches both existing and negative/empty states to avoid
+ * persistent I/O blocking. Always returns deep copies to prevent implicit cache
+ * mutation and missed recompositions. Expected Impact: Eliminates N+1 disk reads,
+ * significantly reducing UI jank during scrolling.
  */
 object CaptureMetadataStore {
 
@@ -17,12 +26,19 @@ object CaptureMetadataStore {
         val transcript: String? = null,
         val bookmarks: List<BookmarkEntry> = emptyList(),
         val isEnhanced: Boolean = false
-    )
+    ) {
+        fun deepCopy(): CaptureMetadata = this.copy(
+            tags = tags.toMutableList(),
+            bookmarks = bookmarks.toList()
+        )
+    }
 
     data class BookmarkEntry(
         val offsetMs: Long,
         val label: String
     )
+
+    private val cache = ConcurrentHashMap<String, CaptureMetadata>()
 
     private fun metadataFile(audioFilePath: String): File {
         val audioFile = File(audioFilePath)
@@ -30,8 +46,14 @@ object CaptureMetadataStore {
     }
 
     fun load(audioFilePath: String): CaptureMetadata {
+        cache[audioFilePath]?.let { return it.deepCopy() }
+
         val file = metadataFile(audioFilePath)
-        if (!file.exists()) return CaptureMetadata()
+        if (!file.exists()) {
+            val emptyMeta = CaptureMetadata()
+            cache[audioFilePath] = emptyMeta
+            return emptyMeta.deepCopy()
+        }
 
         return try {
             val json = JSONObject(file.readText())
@@ -46,28 +68,35 @@ object CaptureMetadataStore {
                     bookmarks.add(BookmarkEntry(bm.getLong("offsetMs"), bm.optString("label", "")))
                 }
             }
-            CaptureMetadata(
+            val metadata = CaptureMetadata(
                 tags = tags,
                 isFavorite = json.optBoolean("isFavorite", false),
                 transcript = if (json.has("transcript")) json.getString("transcript") else null,
                 bookmarks = bookmarks,
                 isEnhanced = json.optBoolean("isEnhanced", false)
             )
+            cache[audioFilePath] = metadata
+            metadata.deepCopy()
         } catch (_: Exception) {
-            CaptureMetadata()
+            val fallback = CaptureMetadata()
+            cache[audioFilePath] = fallback
+            fallback.deepCopy()
         }
     }
 
     fun save(audioFilePath: String, metadata: CaptureMetadata) {
+        val copyToSave = metadata.deepCopy()
+        cache[audioFilePath] = copyToSave
+
         val file = metadataFile(audioFilePath)
         try {
             val json = JSONObject().apply {
-                put("tags", JSONArray(metadata.tags))
-                put("isFavorite", metadata.isFavorite)
-                metadata.transcript?.let { put("transcript", it) }
-                put("isEnhanced", metadata.isEnhanced)
+                put("tags", JSONArray(copyToSave.tags))
+                put("isFavorite", copyToSave.isFavorite)
+                copyToSave.transcript?.let { put("transcript", it) }
+                put("isEnhanced", copyToSave.isEnhanced)
                 val bmArray = JSONArray()
-                metadata.bookmarks.forEach { bm ->
+                copyToSave.bookmarks.forEach { bm ->
                     bmArray.put(JSONObject().apply {
                         put("offsetMs", bm.offsetMs)
                         put("label", bm.label)
@@ -116,6 +145,7 @@ object CaptureMetadataStore {
     }
 
     fun delete(audioFilePath: String) {
+        cache.remove(audioFilePath)
         metadataFile(audioFilePath).delete()
     }
 
